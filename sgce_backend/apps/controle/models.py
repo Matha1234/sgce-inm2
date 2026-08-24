@@ -38,6 +38,14 @@ class ControlePrixRevient(models.Model):
     dossier = models.OneToOneField(
         DossierFabrication, on_delete=models.CASCADE, related_name="controle_prix_revient"
     )
+    composant = models.ForeignKey(
+        "catalogue.Composant", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="controles_prix_revient",
+        help_text=(
+            "Composant comparé (prévisionnel/réel) lorsque le dossier est rattaché à un "
+            "produit du catalogue (RG28, mise à jour STI). Laissé vide pour une comparaison globale."
+        ),
+    )
 
     cout_matieres_reel = models.DecimalField(
         max_digits=12, decimal_places=2, default=0,

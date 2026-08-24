@@ -30,6 +30,7 @@ import EventAvailableIcon from "@mui/icons-material/EventAvailable";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WavingHandIcon from "@mui/icons-material/WavingHand";
+import CategoryIcon from "@mui/icons-material/Category";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
@@ -60,6 +61,7 @@ const ELEMENTS_MENU = [
   { label: "Facturation", to: "/factures", icon: <ReceiptLongIcon />, roles: ["ADMIN", "AGENT_SDO"] },
   { label: "Rentabilité", to: "/rentabilite", icon: <AssessmentIcon />, roles: ["ADMIN"] },
   { label: "Utilisateurs", to: "/utilisateurs", icon: <PeopleIcon />, roles: ["ADMIN"] },
+  { label: "Catalogue", to: "/catalogue", icon: <CategoryIcon />, roles: ["ADMIN"] },
   { label: "Paramètres", to: "/parametres", icon: <SettingsIcon />, roles: null },
 ];
 

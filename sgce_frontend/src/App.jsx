@@ -17,6 +17,7 @@ import FacturesListPage from "./pages/FacturesListPage";
 import ControlesListPage from "./pages/ControlesListPage";
 import MessageriePage from "./pages/MessageriePage";
 import ParametresPage from "./pages/ParametresPage";
+import CataloguePage from "./pages/CataloguePage";
 
 export default function App() {
   return (
@@ -49,6 +50,7 @@ export default function App() {
           <Route element={<ProtectedRoute rolesAutorises={[]} />}>
             <Route path="/utilisateurs" element={<UtilisateursPage />} />
             <Route path="/rentabilite" element={<ControlesListPage />} />
+            <Route path="/catalogue" element={<CataloguePage />} />
           </Route>
         </Route>
       </Route>

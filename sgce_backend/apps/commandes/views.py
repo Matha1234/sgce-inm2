@@ -81,7 +81,19 @@ class DevisCreateView(generics.CreateAPIView):
     permission_classes = [IsAgentSDO]
 
     def perform_create(self, serializer):
-        devis = serializer.save()
+        produit_catalogue = serializer.validated_data.get("produit_catalogue")
+        prix_revient_kwargs = {}
+
+        if produit_catalogue and "prix_revient" not in serializer.validated_data:
+            # RG27 : le prix de revient d'un devis rattaché au catalogue est
+            # calculé automatiquement, composant par composant, plutôt que
+            # saisi manuellement.
+            commande = serializer.validated_data["commande"]
+            prix_revient_kwargs["prix_revient"] = produit_catalogue.calculer_prix_revient(
+                commande.quantite
+            )
+
+        devis = serializer.save(**prix_revient_kwargs)
 
         from apps.ia.ml.estimation_service import predire_cout
         from apps.ia.ml.inflation_service import projeter_devis_pluriannuel

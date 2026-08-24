@@ -32,11 +32,13 @@ class DevisSerializer(serializers.ModelSerializer):
     class Meta:
         model = Devis
         fields = [
-            "id", "commande", "prix_revient", "prix_vente", "duree_production",
+            "id", "commande", "produit_catalogue", "options_ajustees",
+            "prix_revient", "prix_vente", "duree_production",
             "date_devis", "valide", "valide_par", "estimation_ia",
             "pluriannuel", "duree_contrat_annees", "taux_inflation_projete",
         ]
         read_only_fields = ["date_devis", "valide_par", "estimation_ia"]
+        extra_kwargs = {"prix_revient": {"required": False}}
 
     def get_estimation_ia(self, obj):
         estimation = getattr(obj, "estimation_ia", None)
@@ -45,6 +47,27 @@ class DevisSerializer(serializers.ModelSerializer):
         return EstimationIAResumeSerializer(estimation).data
 
     def validate(self, attrs):
+        """
+        RG27 (mise à jour STI) : un devis rattaché à un produit du catalogue
+        calcule automatiquement son prix de revient à partir de la
+        nomenclature du produit ; un devis hors catalogue doit fournir son
+        prix de revient explicitement.
+        """
+        produit_catalogue = attrs.get(
+            "produit_catalogue", getattr(self.instance, "produit_catalogue", None)
+        )
+        prix_revient = attrs.get(
+            "prix_revient", getattr(self.instance, "prix_revient", None)
+        )
+        if not produit_catalogue and prix_revient is None:
+            raise serializers.ValidationError(
+                {
+                    "prix_revient": (
+                        "Obligatoire pour un devis hors catalogue "
+                        "(aucun produit_catalogue renseigné) - RG27."
+                    )
+                }
+            )
         """RG22 : un devis pluriannuel doit porter une duree et un taux d'inflation avant validation."""
         pluriannuel = attrs.get("pluriannuel", getattr(self.instance, "pluriannuel", False))
         valide = attrs.get("valide", getattr(self.instance, "valide", False))
@@ -213,7 +236,7 @@ class ArticleSerializer(serializers.ModelSerializer):
         model = Article
         fields = [
             "id", "designation", "classe_comptable", "type_papier", "type_encre",
-            "type_film", "unite", "quantite_stock", "seuil_securite", "est_en_alerte",
+            "type_film", "unite", "cout_unitaire", "quantite_stock", "seuil_securite", "est_en_alerte",
         ]
         # La quantite en stock ne doit jamais etre modifiee directement :
         # elle n'evolue que via la creation de MouvementStock, pour garder

@@ -16,11 +16,13 @@ class ControlePrixRevientSerializer(serializers.ModelSerializer):
         source="dossier.commande.devis.prix_vente", max_digits=12, decimal_places=2, read_only=True
     )
     cout_reel_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    composant_designation = serializers.CharField(source="composant.designation", read_only=True, default=None)
 
     class Meta:
         model = ControlePrixRevient
         fields = [
             "id", "dossier", "dossier_numero", "commande_numero", "atelier_nom",
+            "composant", "composant_designation",
             "cout_matieres_reel", "cout_temps_machine_reel", "cout_reel_total",
             "marge_cible_pourcentage", "marge_reelle_pourcentage",
             "prix_revient_estime", "prix_vente", "ecart_prix_revient",

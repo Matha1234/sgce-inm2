@@ -12,6 +12,12 @@ __pycache__/
 # Base de données locale
 db.sqlite3
 
+# Fichiers uploadés par les utilisateurs (photos de profil, etc.) : ce sont
+# des données d'exécution propres à chaque déploiement, pas du code source —
+# elles ne doivent jamais être versionnées (cf. media/photos_profil/*.jpg
+# actuellement suivis par erreur : à retirer avec `git rm --cached`).
+media/
+
 # VS Code
 .vscode/
 

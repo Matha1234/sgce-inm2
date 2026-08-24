@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_spectacular',
     # Apps du projet
+    'apps.catalogue',
     'apps.commandes',
     'apps.utilisateurs',
     'apps.facturation',

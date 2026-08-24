@@ -169,6 +169,18 @@ class Devis(models.Model):
     DUREE_CONTRAT_MAX_ANNEES = 5
 
     commande = models.OneToOneField(Commande, on_delete=models.CASCADE, related_name="devis")
+    produit_catalogue = models.ForeignKey(
+        "catalogue.Produit", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="devis_instancies",
+        help_text=(
+            "Produit du catalogue instancié pour ce devis (RG27, mise à jour STI). "
+            "Laissé vide pour un devis hors catalogue, dont le prix de revient est saisi manuellement."
+        ),
+    )
+    options_ajustees = models.JSONField(
+        default=dict, blank=True,
+        help_text="Options mineures ajustées au devis (ex. couleur du papier de couverture).",
+    )
     prix_revient = models.DecimalField(max_digits=12, decimal_places=2)
     prix_vente = models.DecimalField(max_digits=12, decimal_places=2)
     duree_production = models.PositiveIntegerField(
@@ -327,6 +339,10 @@ class Article(models.Model):
     type_encre = models.CharField(max_length=50, blank=True)
     type_film = models.CharField(max_length=50, blank=True)
     unite = models.CharField(max_length=20, default="unité")
+    cout_unitaire = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Coût unitaire de l'article, utilisé par le moteur de calcul du catalogue (RG27).",
+    )
 
     quantite_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     seuil_securite = models.DecimalField(

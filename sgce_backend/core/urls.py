@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/auth/me/', MeView.as_view(), name='me'),
     path('api/auth/changer-mot-de-passe/', ChangerMotDePasseView.as_view(), name='changer-mot-de-passe'),
     path('api/', include('apps.commandes.urls')),
+    path('api/', include('apps.catalogue.urls')),
     path('api/', include('apps.ia.urls')),
     path('api/', include('apps.facturation.urls')),
     path('api/', include('apps.notifications.urls')),
