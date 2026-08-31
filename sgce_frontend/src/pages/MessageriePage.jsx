@@ -4,7 +4,6 @@ import {
   DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputAdornment,
   List, ListItemButton, ListItemText, Stack, Tab, Tabs, TextField, Tooltip, Typography,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
@@ -14,12 +13,16 @@ import SearchIcon from "@mui/icons-material/Search";
 import ReplyIcon from "@mui/icons-material/Reply";
 import MailOutlineIcon from "@mui/icons-material/MailOutlined";
 import { useSelector } from "react-redux";
+import { alpha } from "@mui/material/styles";
 
 import {
   envoyerMessage, listerMessagesEnvoyes, listerMessagesRecus, marquerMessageLu, supprimerMessage,
 } from "../api/messagerieApi";
 import { listerAnnuaire } from "../api/utilisateursApi";
 import { COULEURS_ROLES, LIBELLES_ROLES } from "../constants/roles";
+import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import { useNotifier } from "../components/common/Notifier";
 
 function normaliser(donnees) {
   return Array.isArray(donnees) ? donnees : donnees.results || [];
@@ -49,26 +52,9 @@ function formaterDateRelative(valeur) {
   return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" }) + ` à ${heure}`;
 }
 
-// Pastille carrée arrondie, fond teinté + icône pleine couleur : traitement
-// visuel unique pour l'icône de page et l'en-tête du volet de lecture, afin
-// que les deux zones se répondent visuellement.
-function PastilleIcone({ icone, couleur = "primary.main", taille = 40 }) {
-  return (
-    <Box
-      sx={{
-        width: taille, height: taille, borderRadius: 1.5, display: "flex",
-        alignItems: "center", justifyContent: "center", flexShrink: 0,
-        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-        color: couleur,
-      }}
-    >
-      {icone}
-    </Box>
-  );
-}
-
 export default function MessageriePage() {
   const { utilisateur } = useSelector((state) => state.auth);
+  const { afficherSucces } = useNotifier();
 
   const [onglet, setOnglet] = useState(0);
   const [recus, setRecus] = useState([]);
@@ -85,6 +71,7 @@ export default function MessageriePage() {
   const [contenu, setContenu] = useState("");
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [erreurEnvoi, setErreurEnvoi] = useState("");
+  const [messageASupprimer, setMessageASupprimer] = useState(null);
 
   const charger = async () => {
     setChargement(true);
@@ -147,6 +134,7 @@ export default function MessageriePage() {
     setErreurEnvoi("");
     try {
       await envoyerMessage({ destinataire: destinataire.id, objet, contenu });
+      afficherSucces("Message envoyé avec succès.");
       setDialogueOuvert(false);
       setDestinataire(null);
       setObjet("");
@@ -174,8 +162,16 @@ export default function MessageriePage() {
 
   const gererSuppression = async (evenement, id) => {
     evenement.stopPropagation();
+    setMessageASupprimer(id);
+  };
+
+  const confirmerSuppression = async () => {
+    const id = messageASupprimer;
+    if (!id) return;
+    setMessageASupprimer(null);
     try {
       await supprimerMessage(id);
+      afficherSucces("Message supprimé avec succès.");
       setRecus((liste) => liste.filter((m) => m.id !== id));
       setEnvoyes((liste) => liste.filter((m) => m.id !== id));
       if (messageOuvert?.id === id) setMessageOuvert(null);
@@ -213,39 +209,24 @@ export default function MessageriePage() {
 
   return (
     <Box>
-      {/* En-tête de page : pictogramme + titre + sous-titre sur leur propre ligne */}
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-        <Badge badgeContent={nombreNonLus} color="error" overlap="circular">
-          <PastilleIcone icone={<MailOutlineIcon sx={{ fontSize: 18 }} />} taille={34} />
-        </Badge>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-            Messagerie
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            Échangez directement avec les autres utilisateurs du SGCE-INM.
-          </Typography>
-        </Box>
-      </Stack>
-
-      {/* Action principale : ligne séparée, collée au bord droit */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon sx={{ fontSize: 14 }} />}
-          onClick={ouvrirDialogueNouveauMessage}
-          disableElevation
-          sx={{
-            px: 1.25,
-            py: 0.3,
-            minHeight: 0,
-            fontSize: 11.5,
-            lineHeight: 1.6,
-          }}
-        >
-          Nouveau message
-        </Button>
-      </Box>
+      {/* En-tête de page : pastille + titre + sous-titre + action principale */}
+      <PageHeader
+        icone={
+          <Badge badgeContent={nombreNonLus} color="error" overlap="circular">
+            <MailOutlineIcon />
+          </Badge>
+        }
+        titre="Messagerie"
+        sousTitre="Échangez directement avec les autres utilisateurs du SGCFC-INM."
+        centre
+        taillePastille={28}
+        titreVariant="h6"
+        action={
+          <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={ouvrirDialogueNouveauMessage}>
+            Nouveau message
+          </Button>
+        }
+      />
 
       {erreur && <Alert severity="warning" sx={{ mb: 3 }}>{erreur}</Alert>}
 
@@ -263,7 +244,7 @@ export default function MessageriePage() {
             <Tab icon={<InboxIcon fontSize="small" />} iconPosition="start" label={`Reçus${nombreNonLus > 0 ? ` (${nombreNonLus})` : ""}`} />
             <Tab icon={<SendIcon fontSize="small" />} iconPosition="start" label="Envoyés" />
           </Tabs>
-          <Box sx={{ px: 2, py: 1.5, bgcolor: "grey.50" }}>
+          <Box sx={{ px: 2, py: 1.5, bgcolor: "background.default" }}>
             <TextField
               size="small"
               fullWidth
@@ -271,12 +252,14 @@ export default function MessageriePage() {
               value={recherche}
               onChange={(e) => setRecherche(e.target.value)}
               sx={{ bgcolor: "background.paper" }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" color="disabled" />
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" color="disabled" />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           </Box>
@@ -309,7 +292,7 @@ export default function MessageriePage() {
                     borderColor: "divider",
                     borderLeft: "3px solid",
                     borderLeftColor: nonLu ? "primary.main" : "transparent",
-                    bgcolor: nonLu ? "primary.50" : "transparent",
+                    bgcolor: nonLu ? (t) => alpha(t.palette.primary.main, 0.14) : "transparent",
                     "&:hover .bouton-supprimer-message": { opacity: 1 },
                   }}
                 >
@@ -422,7 +405,7 @@ export default function MessageriePage() {
       </Stack>
 
       <Dialog open={dialogueOuvert} onClose={() => setDialogueOuvert(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1.25 }}>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
           <MailOutlineIcon color="primary" fontSize="small" />
           Nouveau message
         </DialogTitle>
@@ -471,7 +454,7 @@ export default function MessageriePage() {
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <DialogActions>
           <Button onClick={() => setDialogueOuvert(false)}>Annuler</Button>
           <Button
             variant="contained"
@@ -483,6 +466,18 @@ export default function MessageriePage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dialogue de confirmation : suppression d'un message */}
+      <ConfirmDialog
+        ouvert={Boolean(messageASupprimer)}
+        titre="Supprimer ce message ?"
+        message="Le message sera définitivement supprimé de votre messagerie. Cette action est irréversible."
+        icone={<DeleteOutlineIcon sx={{ fontSize: 24 }} />}
+        couleur="error"
+        texteConfirmer="Supprimer"
+        onConfirmer={confirmerSuppression}
+        onAnnuler={() => setMessageASupprimer(null)}
+      />
     </Box>
   );
 }

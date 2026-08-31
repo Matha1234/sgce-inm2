@@ -1,5 +1,5 @@
 -- ============================================================
--- SGCE INM - Sprint 1
+-- SGCFC INM - Sprint 1
 -- Schema Oracle : Table UTILISATEURS avec role fixe
 -- Base cible : FREEPDB1 (utilisateur Matha)
 -- ============================================================
@@ -61,7 +61,7 @@ CREATE INDEX idx_utilisateurs_email ON utilisateurs (email);
 -- ------------------------------------------------------------
 -- 4. Commentaires (documentation directement dans le schema)
 -- ------------------------------------------------------------
-COMMENT ON TABLE utilisateurs IS 'Comptes de la plateforme SGCE : Administrateur, Agent SDO, Chef d''atelier, Magasinier';
+COMMENT ON TABLE utilisateurs IS 'Comptes de la plateforme SGCFC : Administrateur, Agent SDO, Chef d''atelier, Magasinier';
 COMMENT ON COLUMN utilisateurs.role IS 'Role unique de l''utilisateur : ADMIN, AGENT_SDO, CHEF_ATELIER ou MAGASINIER';
 COMMENT ON COLUMN utilisateurs.password IS 'Hash du mot de passe genere par Django (jamais stocke en clair)';
 

@@ -22,6 +22,7 @@ import { useSelector } from "react-redux";
 import { listerCommandes, listerDossiers, listerArticles } from "../api/commandesApi";
 import { recupererTableauBordRentabilite } from "../api/controleApi";
 import { COULEURS_STATUT_COMMANDE, LIBELLES_STATUT_COMMANDE } from "../constants/roles";
+import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
 
 // Correspondance entre les noms de couleur MUI utilisés par
 // COULEURS_STATUT_COMMANDE (déjà utilisé pour les Chips de statut ailleurs
@@ -40,37 +41,6 @@ function normaliser(d) {
   return Array.isArray(d) ? d : d.results || [];
 }
 
-// Résout une clé de couleur MUI ("success.main", "text.secondary"...) vers
-// la couleur de fond teintée la plus proche. Les clés hors palette
-// catégorielle (text.*, grey.*) retombent sur un gris neutre plutôt que
-// d'être forcées en bleu primaire.
-function fondTeinte(theme, couleur) {
-  const [famille] = couleur.split(".");
-  const categorielle = ["primary", "secondary", "success", "error", "warning", "info"];
-  if (categorielle.includes(famille)) {
-    return alpha(theme.palette[famille].main, 0.1);
-  }
-  return theme.palette.grey[200];
-}
-
-// Pastille carrée arrondie, fond teinté + icône pleine couleur : même
-// traitement que sur les pages Messagerie et Paramètres, pour une identité
-// visuelle cohérente sur l'ensemble de l'application.
-function PastilleIcone({ icone, couleur = "primary.main", taille = 34 }) {
-  return (
-    <Box
-      sx={{
-        width: taille, height: taille, borderRadius: 1.5, display: "flex",
-        alignItems: "center", justifyContent: "center", flexShrink: 0,
-        bgcolor: (theme) => fondTeinte(theme, couleur),
-        color: couleur,
-      }}
-    >
-      {icone}
-    </Box>
-  );
-}
-
 function CarteChiffre({ titre, valeur, icone, couleur = "primary.main" }) {
   return (
     <Card
@@ -83,13 +53,13 @@ function CarteChiffre({ titre, valeur, icone, couleur = "primary.main" }) {
         "&:hover": { boxShadow: 3, transform: "translateY(-1px)" },
       }}
     >
-      <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.75, py: 2.25, "&:last-child": { pb: 2.25 } }}>
-        <PastilleIcone icone={icone} couleur={couleur} taille={42} />
+      <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 1.5, "&:last-child": { pb: 1.5 } }}>
+        <PastilleIcone icone={icone} couleur={couleur} taille={34} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" color="text.secondary" noWrap>
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: 12.5 }}>
             {titre}
           </Typography>
-          <Typography variant="h5" sx={{ color: couleur, fontWeight: 700, lineHeight: 1.25 }}>
+          <Typography variant="h6" sx={{ color: couleur, fontWeight: 700, lineHeight: 1.25 }}>
             {valeur}
           </Typography>
         </Box>
@@ -100,7 +70,7 @@ function CarteChiffre({ titre, valeur, icone, couleur = "primary.main" }) {
 
 function EnTeteSection({ icone, titre }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 2 }}>
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mb: 2, justifyContent: "center" }}>
       {icone}
       <Typography variant="h6" sx={{ fontWeight: 700 }}>
         {titre}
@@ -111,6 +81,7 @@ function EnTeteSection({ icone, titre }) {
 
 export default function DashboardHomePage() {
   const { utilisateur } = useSelector((state) => state.auth);
+    const mode = useSelector((state) => state.theme.mode);
   const role = utilisateur?.role;
 
   const [chargement, setChargement] = useState(true);
@@ -125,7 +96,8 @@ export default function DashboardHomePage() {
   const charger = useCallback(
     async (estActualisation = false) => {
       if (!role) return;
-      estActualisation ? setActualisation(true) : setChargement(true);
+      if (estActualisation) setActualisation(true);
+      else setChargement(true);
       setErreur("");
       try {
         const taches = [];
@@ -201,33 +173,28 @@ export default function DashboardHomePage() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5}>
-          <PastilleIcone icone={<DashboardIcon sx={{ fontSize: 18 }} />} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Tableau de bord
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-              Vue d'ensemble adaptée à votre rôle sur le SGCE-INM.
-            </Typography>
-          </Box>
-        </Stack>
-        <Stack direction="row" alignItems="center" spacing={1}>
-          {derniereMiseAJour && (
-            <Typography variant="caption" color="text.disabled">
-              Actualisé à {derniereMiseAJour.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-            </Typography>
-          )}
-          <TooltipMui title="Actualiser">
-            <span>
-              <IconButton size="small" onClick={() => charger(true)} disabled={actualisation}>
-                {actualisation ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-              </IconButton>
-            </span>
-          </TooltipMui>
-        </Stack>
-      </Stack>
+      <PageHeader
+        icone={<DashboardIcon sx={{ fontSize: 18 }} />}
+        titre="Tableau de bord"
+        sousTitre="Vue d'ensemble adaptée à votre rôle sur le SGCFC-INM."
+        centre
+        action={
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+            {derniereMiseAJour && (
+              <Typography variant="caption" color="text.disabled">
+                Actualisé à {derniereMiseAJour.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              </Typography>
+            )}
+            <TooltipMui title="Actualiser">
+              <span>
+                <IconButton size="small" onClick={() => charger(true)} disabled={actualisation}>
+                  {actualisation ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </TooltipMui>
+          </Stack>
+        }
+      />
 
       {erreur && <Alert severity="warning" sx={{ mb: 3 }}>{erreur}</Alert>}
 
@@ -235,7 +202,7 @@ export default function DashboardHomePage() {
       {(role === "ADMIN" || role === "AGENT_SDO") && (
         <Box sx={{ mb: 4 }}>
           <EnTeteSection icone={<AssignmentIcon color="primary" fontSize="small" />} titre="Devis et commandes" />
-          <Grid container spacing={2.5}>
+          <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre titre="Commandes au total" valeur={commandes.length} icone={<AssignmentIcon sx={{ fontSize: 20 }} />} />
             </Grid>
@@ -266,7 +233,7 @@ export default function DashboardHomePage() {
       {(role === "ADMIN" || role === "CHEF_ATELIER") && (
         <Box sx={{ mb: 4 }}>
           <EnTeteSection icone={<PrecisionManufacturingIcon color="primary" fontSize="small" />} titre="Production" />
-          <Grid container spacing={2.5} sx={{ mb: chargeParAtelier.length > 0 ? 2.5 : 0 }}>
+          <Grid container spacing={2} sx={{ mb: chargeParAtelier.length > 0 ? 2.5 : 0 }}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre titre="Dossiers de fabrication" valeur={dossiers.length} icone={<AssignmentIcon sx={{ fontSize: 20 }} />} />
             </Grid>
@@ -284,7 +251,7 @@ export default function DashboardHomePage() {
           {chargeParAtelier.length > 0 && (
             <Card sx={{ boxShadow: 1 }}>
               <CardContent>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, textAlign: "center" }}>
                   Avancement par atelier
                 </Typography>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -292,8 +259,8 @@ export default function DashboardHomePage() {
                     <Box
                       key={a.atelier}
                       sx={{
-                        flex: 1, p: 2, borderRadius: 1.5, border: "1px solid",
-                        borderColor: "divider", bgcolor: "grey.50",
+                        flex: 1, p: 1.5, borderRadius: 1.5, border: "1px solid",
+                        borderColor: "divider", bgcolor: "background.default",
                       }}
                     >
                       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -327,7 +294,7 @@ export default function DashboardHomePage() {
       {(role === "ADMIN" || role === "MAGASINIER") && (
         <Box sx={{ mb: 4 }}>
           <EnTeteSection icone={<Inventory2Icon color="primary" fontSize="small" />} titre="Stock" />
-          <Grid container spacing={2.5}>
+          <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre
                 titre="Articles en alerte de stock"
@@ -348,7 +315,7 @@ export default function DashboardHomePage() {
       {role === "ADMIN" && rentabilite && (
         <Box sx={{ mb: 4 }}>
           <EnTeteSection icone={<AssessmentIcon color="primary" fontSize="small" />} titre="Rentabilité de la fabrication" />
-          <Grid container spacing={2.5}>
+          <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre
                 titre="Fiches de contrôle"
@@ -404,15 +371,33 @@ export default function DashboardHomePage() {
         <Card sx={{ boxShadow: 1 }}>
           <CardContent>
             <EnTeteSection icone={<AssignmentIcon color="primary" fontSize="small" />} titre="Répartition des commandes par statut" />
-            <Box sx={{ width: "100%", height: 300 }}>
+            <Box sx={{ width: "100%", height: 260 }}>
               <ResponsiveContainer>
                 <BarChart data={donneesGraphique} barCategoryGap="28%">
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={alpha("#000", 0.06)} />
-                  <XAxis dataKey="statut" tick={{ fontSize: 12, fill: "#616161" }} axisLine={{ stroke: "#e0e0e0" }} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 12, fill: "#616161" }} axisLine={false} tickLine={false} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke={mode === "sombre" ? alpha("#fff", 0.12) : alpha("#000", 0.06)}
+                  />
+                  <XAxis
+                    dataKey="statut"
+                    tick={{ fontSize: 12, fill: mode === "sombre" ? "#bdbdbd" : "#616161" }}
+                    axisLine={{ stroke: mode === "sombre" ? "rgba(255,255,255,0.25)" : "#e0e0e0" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 12, fill: mode === "sombre" ? "#bdbdbd" : "#616161" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip
-                    cursor={{ fill: alpha("#1565c0", 0.06) }}
-                    contentStyle={{ borderRadius: 8, border: "1px solid #e0e0e0", fontSize: 13 }}
+                    cursor={{ fill: alpha("#1565c0", mode === "sombre" ? 0.18 : 0.06) }}
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: `1px solid ${mode === "sombre" ? "rgba(255,255,255,0.2)" : "#e0e0e0"}`,
+                      fontSize: 13,
+                    }}
                   />
                   <Bar dataKey="nombre" radius={[4, 4, 0, 0]} maxBarSize={56}>
                     {donneesGraphique.map((entree) => (

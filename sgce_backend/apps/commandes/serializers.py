@@ -210,11 +210,13 @@ class DossierFabricationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         dossier = super().create(validated_data)
         self._synchroniser_atelier_commande(dossier)
+        self._synchroniser_statut_commande(dossier)
         return dossier
 
     def update(self, instance, validated_data):
         dossier = super().update(instance, validated_data)
         self._synchroniser_atelier_commande(dossier)
+        self._synchroniser_statut_commande(dossier)
         return dossier
 
     @staticmethod
@@ -227,6 +229,24 @@ class DossierFabricationSerializer(serializers.ModelSerializer):
         nom_atelier = dossier.atelier.nom
         if dossier.commande.atelier != nom_atelier:
             Commande.objects.filter(pk=dossier.commande_id).update(atelier=nom_atelier)
+
+    @staticmethod
+    def _synchroniser_statut_commande(dossier):
+        """
+        Correctif : le statut EN_PRODUCTION d'une commande n'etait jamais
+        applique par l'application (seul le seed fictif le posait). Des que
+        le chef d'atelier fait passer un dossier en cours (EN_COURS), la
+        commande associee devient EN_PRODUCTION ; si le dossier revient a
+        CREE, elle repasse VALIDEE. La livraison (LIVREE) reste declenchee
+        uniquement par l'emission de la facture definitive (RG13), jamais
+        par le statut du dossier. Les statuts ANNULEE/LIVREE ne sont jamais
+        ecrases.
+        """
+        statut_commande = dossier.commande.statut
+        if dossier.statut_production == DossierFabrication.Statut.EN_COURS and statut_commande == Commande.Statut.VALIDEE:
+            Commande.objects.filter(pk=dossier.commande_id).update(statut=Commande.Statut.EN_PRODUCTION)
+        elif dossier.statut_production == DossierFabrication.Statut.CREE and statut_commande == Commande.Statut.EN_PRODUCTION:
+            Commande.objects.filter(pk=dossier.commande_id).update(statut=Commande.Statut.VALIDEE)
 
 
 class ArticleSerializer(serializers.ModelSerializer):

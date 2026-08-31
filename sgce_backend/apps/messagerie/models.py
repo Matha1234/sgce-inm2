@@ -4,7 +4,7 @@ from django.db import models
 
 class Message(models.Model):
     """
-    Message interne echange entre deux utilisateurs du SGCE-INM (boite de
+    Message interne echange entre deux utilisateurs du SGCFC-INM (boite de
     reception accessible depuis l'icone de messagerie de la barre de
     navigation). Ne remplace pas les notifications systeme (apps.notifications),
     qui restent generees automatiquement par les evenements metier.

@@ -4,7 +4,7 @@ from django.db import models
 
 class Utilisateur(AbstractUser):
     """
-    Modele utilisateur personnalise de la plateforme SGCE.
+    Modele utilisateur personnalise de la plateforme SGCFC.
     Ajoute un champ 'role' a choix fixes par rapport a AbstractUser.
     Correspond a la table 'utilisateurs' documentee dans
     docs/schema/01_schema_utilisateurs.sql

@@ -4,6 +4,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 import AppLayout from "./layout/AppLayout";
 
 import LoginPage from "./pages/LoginPage";
+import ReinitialiserMotDePassePage from "./pages/ReinitialiserMotDePassePage";
 import AccesRefusePage from "./pages/AccesRefusePage";
 import DashboardHomePage from "./pages/DashboardHomePage";
 import CommandesListPage from "./pages/CommandesListPage";
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reinitialiser-mot-de-passe" element={<ReinitialiserMotDePassePage />} />
       <Route path="/acces-refuse" element={<AccesRefusePage />} />
 
       <Route element={<ProtectedRoute />}>

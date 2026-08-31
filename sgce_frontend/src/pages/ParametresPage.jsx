@@ -3,7 +3,6 @@ import {
   Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Divider,
   Grid, IconButton, InputAdornment, Stack, TextField, Tooltip, Typography,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import SaveIcon from "@mui/icons-material/Save";
 import LockResetIcon from "@mui/icons-material/LockReset";
@@ -19,28 +18,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { changerMotDePasse, mettreAJourPhotoProfil, mettreAJourProfil } from "../api/utilisateursApi";
 import { setUtilisateur } from "../store/authSlice";
 import { COULEURS_ROLES, LIBELLES_ROLES } from "../constants/roles";
+import PageHeader from "../components/common/PageHeader";
 
 function formaterDate(valeur) {
   if (!valeur) return "—";
   return new Date(valeur).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
-}
-
-// Pastille carrée arrondie, fond teinté + icône pleine couleur : même
-// traitement que sur la page Messagerie, pour une identité visuelle
-// cohérente entre les pages de l'application.
-function PastilleIcone({ icone, taille = 40 }) {
-  return (
-    <Box
-      sx={{
-        width: taille, height: taille, borderRadius: 1.5, display: "flex",
-        alignItems: "center", justifyContent: "center", flexShrink: 0,
-        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-        color: "primary.main",
-      }}
-    >
-      {icone}
-    </Box>
-  );
 }
 
 // En-tête de section réutilisé pour chaque carte (icône + titre + phrase
@@ -167,18 +149,15 @@ export default function ParametresPage() {
 
   return (
     <Box>
-      {/* En-tête de page : même gabarit que la page Messagerie (pastille + titre + sous-titre) */}
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 3 }}>
-        <PastilleIcone icone={<SettingsIcon sx={{ fontSize: 18 }} />} taille={34} />
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-            Paramètres du compte
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-            Gérez vos informations personnelles, votre photo et la sécurité de votre compte.
-          </Typography>
-        </Box>
-      </Stack>
+      {/* En-tête de page : même gabarit que les autres pages */}
+      <PageHeader
+        icone={<SettingsIcon />}
+        titre="Paramètres du compte"
+        sousTitre="Gérez vos informations personnelles, votre photo et la sécurité de votre compte."
+        centre
+        taillePastille={28}
+        titreVariant="h6"
+      />
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -259,7 +238,7 @@ export default function ParametresPage() {
               <EnTeteSection
                 icone={<BadgeIcon color="primary" fontSize="small" />}
                 titre="Informations personnelles"
-                description="Ces informations sont visibles par les autres utilisateurs du SGCE-INM (annuaire, messagerie)."
+                description="Ces informations sont visibles par les autres utilisateurs du SGCFC-INM (annuaire, messagerie)."
               />
               <Divider sx={{ mb: 2.5 }} />
 
@@ -315,16 +294,18 @@ export default function ParametresPage() {
                     onChange={(e) => setAncienMotDePasse(e.target.value)}
                     fullWidth
                     required
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Tooltip title={voirAncien ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
-                            <IconButton type="button" size="small" onClick={() => setVoirAncien((v) => !v)} edge="end">
-                              {voirAncien ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title={voirAncien ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                              <IconButton type="button" size="small" onClick={() => setVoirAncien((v) => !v)} edge="end">
+                                {voirAncien ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
                   <TextField
@@ -343,16 +324,18 @@ export default function ParametresPage() {
                         " "
                       )
                     }
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Tooltip title={voirNouveau ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
-                            <IconButton type="button" size="small" onClick={() => setVoirNouveau((v) => !v)} edge="end">
-                              {voirNouveau ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title={voirNouveau ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                              <IconButton type="button" size="small" onClick={() => setVoirNouveau((v) => !v)} edge="end">
+                                {voirNouveau ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
                   <TextField
@@ -368,16 +351,18 @@ export default function ParametresPage() {
                         ? "Ne correspond pas au nouveau mot de passe."
                         : " "
                     }
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <Tooltip title={voirConfirmation ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
-                            <IconButton type="button" size="small" onClick={() => setVoirConfirmation((v) => !v)} edge="end">
-                              {voirConfirmation ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip title={voirConfirmation ? "Masquer le mot de passe" : "Afficher le mot de passe"}>
+                              <IconButton type="button" size="small" onClick={() => setVoirConfirmation((v) => !v)} edge="end">
+                                {voirConfirmation ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
                   <Box sx={{ pt: 0.5 }}>

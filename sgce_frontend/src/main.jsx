@@ -1,31 +1,37 @@
-import { StrictMode } from "react";
+import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { Provider } from "react-redux";
+import { Provider, useSelector } from "react-redux";
 import { BrowserRouter } from "react-router-dom";
-import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
+import { CssBaseline, ThemeProvider } from "@mui/material";
 
 import store from "./store/store";
 import App from "./App.jsx";
+import { creerTheme } from "./theme.js";
+import { NotifierProvider } from "./components/common/Notifier";
 import "./index.css";
 
-const theme = createTheme({
-  palette: {
-    primary: { main: "#1565c0", dark: "#0d3c73", light: "#5e92f3" },
-    secondary: { main: "#f9a825" },
-    background: { default: "#f5f7fa" },
-  },
-  shape: { borderRadius: 8 },
-});
+// Applique le thème clair ou sombre selon le mode stocké dans le store.
+// eslint-disable-next-line react/only-export-components -- composant racine local à main.jsx
+function AppAvecTheme() {
+  const mode = useSelector((state) => state.theme.mode);
+  const theme = useMemo(() => creerTheme(mode), [mode]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <BrowserRouter>
+        <NotifierProvider>
+          <App />
+        </NotifierProvider>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
+}
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={store}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ThemeProvider>
+      <AppAvecTheme />
     </Provider>
   </StrictMode>
 );

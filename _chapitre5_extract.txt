@@ -1,0 +1,309 @@
+PARTIE II. ANALYSE ET CONCEPTION
+CHAPITRE 5. Analyse conceptuelle
+Le présent chapitre applique, au thème « Conception et réalisation d'un système de gestion des coûts, de la fabrication et du contrôle du prix de revient » retenu pour le stage à l'Imprimerie Nationale de Madagascar (INM), une démarche d'analyse conceptuelle combinant le cadre Agile/Scrum pour l'élaboration du besoin et une approche par domaines fonctionnels (bounded contexts) pour la modélisation orientée objet. Le système à concevoir est désigné ci-après le SGCE-INM. Il couvre le circuit complet allant de l'enregistrement du devis, au sein du Service des Devis et de l'Ordonnancement (SDO), jusqu'au contrôle du prix de revient réel à la clôture du dossier de fabrication, en passant par la planification de la production dans les ateliers SPA et SPB, la gestion du stock de matières premières, la facturation, et un système de notifications transverses.
+Mise à jour STI — le modèle Catalogue : à la suite d'un échange de clarification avec le Service Technique de l'Innovation (STI), portant sur le principe général de gestion des coûts de fabrication en imprimerie, il est apparu que l'estimation du prix de revient ne doit pas reposer uniquement sur une comparaison statistique à des dossiers historiques similaires (module IA), mais d'abord sur une structure de coût explicite et réutilisable : un Catalogue de produits, décomposés en composants, chacun porteur de sa propre nomenclature de matières premières et de sa propre gamme d'opérations. Cette clarification irrigue l'ensemble du présent chapitre et y est signalée explicitement à chaque occurrence par la mention « NOUVEAU — STI ».
+5.1  Cadre Scrum adapté au contexte du stage
+Une équipe Scrum est un ensemble organisé de personnes qui participent à la réalisation d'un projet suivant les principes du cadre de travail Scrum. Même en répartissant les rôles, la méthode Scrum exclut toute hiérarchisation stricte : il n'y a pas de chef au sens classique, mais un ensemble de responsabilités réparties qui permet à l'équipe de s'auto-organiser et de s'adapter au fil des sprints. Dans le cadre de ce stage, le mémorant assume successivement les trois rôles Scrum ci-dessous, en concertation avec le maître de stage à l'INM, qui joue le rôle de client représentant le Service des Devis et de l'Ordonnancement (SDO) ainsi que le Service Technique de l'Innovation (STI).
+5.1.1  Le Product Owner
+Le Product Owner élabore les besoins et porte la vision métier du produit final. Il priorise les user stories, en donnant la priorité aux fonctionnalités cœur de métier du SDO, et arbitre les choix fonctionnels en cas de doute — notamment sur le périmètre de l'estimation automatisée par rapport à l'expertise humaine existante, sur le degré de granularité du contrôle du prix de revient, et sur l'articulation avec le stock de matières premières et la facturation.
+5.1.2  Le Scrum Master
+Le Scrum Master veille à ce que la méthode Scrum soit correctement appliquée tout au long du projet, organise les sprints, et fait le lien entre les contraintes de terrain de l'INM (disponibilité des interlocuteurs du SDO et des ateliers de production) et l'avancement technique du développement.
+5.1.3  L'équipe de développement
+L'équipe de développement met en œuvre le modèle de données, l'API Django REST Framework sécurisée par rôle, l'interface React/Redux Toolkit, et le module d'estimation XGBoost. Elle travaille de façon incrémentale, sprint après sprint, en organisant le code par domaine fonctionnel (bounded context) plutôt que par couche technique isolée, afin de limiter le couplage entre le Catalogue, les Devis, la Production, le Contrôle et la Sécurité (section 5.8).
+5.2  Élaboration du Product Backlog
+Le Product Backlog constitue la colonne vertébrale du projet mené selon la méthode agile. Son élaboration s'articule autour de quatre étapes clés : l'établissement de la vision du projet, la liste des acteurs, les thèmes et domaines fonctionnels, et enfin les user stories — complétées, pour ce projet, par une cinquième étape propre à la présente itération : l'intégration de la clarification du STI sur le principe du Catalogue.
+5.2.1  Vision du projet
+Le projet vise à développer un système de gestion des coûts et de la fabrication pour l'Imprimerie Nationale de Madagascar, couvrant cinq domaines fonctionnels (bounded contexts, section 5.8) : un référentiel et catalogue de produits structuré en familles, composants et nomenclatures (matières premières et opérations), qui sert de base de calcul unique ; l'enregistrement des commandes et des devis comme instanciation de ce catalogue pour une quantité donnée, affinée par une estimation intelligente ; la planification et le suivi de la production entre les ateliers SPA et SPB, avec la gestion du stock de matières premières ; le contrôle systématique du prix de revient réel à la clôture, composant par composant, et la facturation associée ; et la gestion transverse des utilisateurs, des rôles et des notifications. La plateforme est hébergée localement à l'INM, sans dépendance à une connexion Internet externe (contrainte institutionnelle, chapitre 4).
+5.2.2  Liste des acteurs
+Le tableau 5.1 présente les acteurs humains qui interviennent dans le fonctionnement de la plateforme. Contrairement à une liste détaillée par fiche (rôle, critère de satisfaction, fréquence d'utilisation, niveau de connaissance technique et métier pour chacun), l'information structurante retenue ici est le rôle synthétique de chaque acteur ; le détail des permissions par rôle est formalisé dans les règles de gestion RG14 à RG17 (section 5.6) et dans le diagramme de cas d'utilisation (section 5.3).
+Tableau 5.1 : Acteurs de la plateforme
+Acteur
+Nature
+Rôle synthétique
+Agent SDO
+Humain (RBAC)
+Enregistre les commandes, crée et valide les devis à partir du catalogue, transmet le dossier à l'atelier, consulte le contrôle du prix de revient à la clôture.
+Chef d'atelier
+Humain (RBAC)
+Suit les dossiers de son atelier (SPA ou SPB), fait évoluer les étapes de production, demande des sorties de matière, saisit les consommations réelles à la clôture.
+Magasinier
+Humain (RBAC)
+Gère les articles de stock et confirme les mouvements d'entrée/sortie, en particulier ceux rattachés à un dossier de fabrication.
+Administrateur / Direction
+Humain (RBAC)
+Gère le catalogue de produits, les comptes utilisateurs et les rôles ; consulte le tableau de bord de rentabilité global ; supervise l'ensemble du système.
+5.2.3  Thèmes et domaines fonctionnels
+À partir de la vision du projet, les thèmes suivants constituent les grands domaines fonctionnels du système. Chaque thème correspond, à quelques regroupements près, à l'un des cinq bounded contexts détaillés en section 5.8 :
+Référentiel & Catalogue de produits : utilisateurs, organismes clients, articles, familles, produits, composants, nomenclature (mise à jour STI) ;
+Devis & Estimation : commandes, devis instanciés à partir du catalogue, estimation intelligente (IA) ;
+Production & Stock : ateliers, dossiers de fabrication, étapes de production, mouvements de stock ;
+Contrôle & Facturation : contrôle du prix de revient composant par composant, factures proforma et définitive ;
+Sécurité & Notifications : rôles et permissions, notifications transverses.
+5.2.4  User stories
+Une user story est une phrase simple décrivant une fonctionnalité logicielle, rédigée du point de vue de l'utilisateur final, selon le format « En tant que <qui>, je veux <quoi>, afin de <pourquoi> ».
+Tableau 5.2 : User stories
+En tant que…
+Je veux…
+Afin de…
+Administrateur
+Créer une famille de produits (feuilles volantes, brochures, magazines/livres/agendas, carnets/registres)
+Structurer le catalogue par mode de calcul de coût (NOUVEAU — STI).
+Créer un produit du catalogue et le décomposer en composants numérotés (1..N)
+Réutiliser cette structure à chaque devis basé sur ce produit (NOUVEAU — STI).
+Définir, pour chaque composant, sa nomenclature de matières premières et sa gamme d'opérations
+Fiabiliser le calcul automatique du prix de revient, composant par composant (NOUVEAU — STI).
+Agent SDO
+M'authentifier sur la plateforme
+Accéder à mon espace de gestion des devis.
+Enregistrer un nouvel organisme client
+Rattacher la commande au bon client.
+Sélectionner un produit du catalogue et saisir la quantité commandée
+Instancier automatiquement la structure de coût sans la ressaisir (NOUVEAU — STI).
+Consulter l'estimation intelligente proposée et valider le devis
+Gagner du temps tout en conservant la maîtrise finale du prix de vente.
+Calculer un devis intelligent pour un marché public pluriannuel
+Éviter la sous ou sur-évaluation du prix sur la durée du contrat.
+Chef d'atelier
+Consulter uniquement les dossiers affectés à mon atelier
+Planifier la production sans être noyé par les autres ateliers.
+Faire évoluer les étapes d'un dossier et demander une sortie de matière
+Informer les autres acteurs et disposer des ressources nécessaires.
+Saisir les consommations réelles, composant par composant, à la clôture
+Déclencher le contrôle automatique du prix de revient réel (NOUVEAU — STI).
+Magasinier
+Gérer la fiche d'un article et ses mouvements d'entrée/sortie
+Tenir un stock cohérent et traçable.
+Consulter la liste des articles en alerte de stock
+Anticiper les réapprovisionnements avant rupture.
+Administrateur
+Gérer les comptes utilisateurs et leurs rôles
+Maintenir la sécurité et l'organisation du système.
+Consulter le tableau de bord de rentabilité global
+Suivre l'ensemble des coûts et des marges.
+5.2.5  Nouveauté du STI : le principe du Catalogue
+Cette section documente la clarification apportée par le STI et intégrée à l'analyse. Elle s'appuie sur une transcription d'échange portant sur le principe général de gestion des coûts de fabrication en imprimerie, résumée ci-après en trois étapes.
+Le Catalogue. La première étape consiste à structurer la gamme de produits de l'INM en familles homogènes du point de vue de leur mode de calcul de coût : feuilles volantes (feuillets simples), brochures avec couverture, magazines/livres/agendas, carnets de factures et registres. Mélanger les modes de calcul entre familles rendrait la plateforme confuse ; chaque famille regroupe donc les produits qui partagent une même logique de décomposition. Chaque produit du catalogue est ensuite décomposé en composants numérotés (par exemple, pour un agenda ou une brochure : Composant 1 = Couverture, Composant 2 = Intérieur), et chaque composant porte deux types d'éléments de calcul : les matières premières nécessaires (papier, encre, agrafes, reliure), pour lesquelles on définit la quantité requise par exemplaire, et les opérations à réaliser (impression recto/verso, pliage, piquage, assemblage), pour lesquelles on définit le temps machine requis par exemplaire et le poste concerné.
+Le Devis. La deuxième étape est l'instanciation du catalogue pour répondre au besoin d'un client précis. Puisque la structure du produit est déjà configurée dans le catalogue, l'Agent SDO n'a pas à la redéfinir à chaque devis : il sélectionne le produit et saisit uniquement la quantité commandée par le client. Le moteur de calcul applique alors automatiquement les formules préexistantes de chaque composant, multipliées par la quantité, pour obtenir le prix de revient estimé — l'utilisateur pouvant ajuster quelques options mineures spécifiques au devis, par exemple une couleur de papier différente entre la couverture et l'intérieur.
+La Réalisation et le contrôle du coût de revient. Une fois le devis validé, le dossier entre en phase de fabrication réelle : sortie effective des matières premières, composant par composant, et relevé du temps réel passé sur chaque poste. Le système compare alors systématiquement le prévisionnel du devis (issu du catalogue) et le réel constaté en fabrication, afin de calculer le coût de revient exact, composant par composant, et d'en déduire la marge nette réellement dégagée. Le STI a par ailleurs signalé un besoin non encore couvert par la présente itération — une gestion de scénarios permettant d'adapter facilement les formules de calcul à des cas de figure particuliers (ex. variation saisonnière du prix du papier) — reporté au chronogramme (section 5.4) comme évolution ultérieure plutôt qu'intégré au noyau fonctionnel, faute de spécification suffisamment précise à ce stade.
+Cette clarification ne remet pas en cause le module d'estimation intelligente : elle lui donne une base de calcul déterministe et auditable, alimentée par une structure de coût explicite, sur laquelle le modèle XGBoost vient s'appuyer pour affiner l'estimation à partir de l'historique des dossiers similaires et couvrir les cas où un produit n'est pas encore correctement décrit dans le catalogue.
+5.3  Diagramme de cas d'utilisation et priorisation
+La figure 5.1 présente le diagramme de cas d'utilisation du SGCE-INM. Il formalise, sous forme graphique, les user stories du tableau 5.2 : chaque acteur y est relié aux cas d'utilisation qu'il déclenche, et les relations «include»/«extend» explicitent les dépendances entre cas d'utilisation — notamment le fait que la création d'un devis (UC-02) inclut systématiquement une consultation du catalogue (UC-01) et l'appel au moteur d'estimation IA (UC-08), et que la génération du dossier de fabrication (UC-03) étend la validation du devis (UC-02) plutôt que d'en être totalement indépendante.
+Figure 5.1 : Diagramme de cas d'utilisation du SGCE-INM
+Le tableau 5.3 reprend l'ensemble des cas d'utilisation identifiés et leur priorisation selon la méthode MoSCoW. Le noyau fonctionnel Must have regroupe les huit cas d'utilisation couvrant le circuit complet catalogue → devis → production → contrôle → facturation ; deux cas d'utilisation Should have complètent ce noyau sans en conditionner le fonctionnement ; un dernier cas d'utilisation, Could have, correspond au besoin de gestion des scénarios de calcul signalé par le STI (section 5.2.5) mais non développé dans la présente itération faute de spécification suffisamment précise.
+Tableau 5.3 : Cas d'utilisation et priorisation (MoSCoW)
+UC
+Intitulé
+Acteur principal
+Priorité / statut
+UC-01
+Gérer le catalogue de produits (familles, produits, composants, nomenclature)
+Administrateur
+Must have
+UC-02
+Créer et valider un devis (instanciation du catalogue)
+Agent SDO
+Must have
+UC-08
+Estimer le prix de revient par IA
+Système (inclus dans UC-02)
+Must have
+UC-03
+Générer et ordonnancer le dossier de fabrication
+Système (étend UC-02)
+Must have
+UC-04
+Suivre la fabrication étape par étape
+Chef d'atelier
+Must have
+UC-05
+Gérer une sortie de matière
+Chef d'atelier / Magasinier
+Must have
+UC-06
+Contrôler le prix de revient à la clôture
+Chef d'atelier
+Must have
+UC-10
+Gérer les utilisateurs et les rôles
+Administrateur
+Must have
+UC-07
+Émettre une facture (proforma / définitive)
+Agent SDO
+Should have
+UC-09
+Consulter le tableau de bord de rentabilité
+Administrateur
+Should have
+UC-11
+Recevoir des notifications transverses
+Tous les rôles
+Should have
+UC-12
+Gérer les scénarios de calcul
+Administrateur
+Could have — non développé
+5.4  Chronogramme de réalisation
+Le tableau 5.4 présente le chronogramme retenu pour la réalisation du SGCE-INM, organisé par domaine fonctionnel (bounded context, section 5.8) plutôt que par sprint isolé, afin de garder une correspondance directe entre le planning et l'architecture du système. Le développement du Référentiel & Catalogue est positionné en amont, puisque les Devis en dépendent directement (RG27) ; le Contrôle & Facturation ne peut être développé qu'après la Production, dont il consomme les données de clôture.
+Tableau 5.4 : Chronogramme de réalisation par domaine fonctionnel
+Domaine fonctionnel
+Contenu
+Période
+Sécurité & Notifications (socle)
+Authentification JWT, rôles, notifications transverses
+Semaine 1
+Référentiel & Catalogue
+Utilisateurs, organismes, articles, familles/produits/composants/nomenclature (NOUVEAU — STI)
+Semaines 2-3
+Devis & Estimation
+Commandes, devis instanciés du catalogue, estimation IA, devis pluriannuel
+Semaines 4-5
+Production & Stock
+Ateliers, dossiers de fabrication, étapes, mouvements de stock
+Semaines 6-7
+Contrôle & Facturation
+Contrôle du prix de revient par composant, factures proforma/définitive
+Semaine 8
+Tableau de bord & intégration
+Vue de rentabilité consolidée, tests d'intégration inter-contextes
+Semaines 9-10
+Gestion des scénarios de calcul (UC-12)
+Non planifiée dans cette itération — spécification à approfondir avec le STI
+Reporté
+5.5  Dictionnaire des données
+Le tableau 5.5 présente une synthèse des dix-neuf entités du domaine, organisées par bounded context (section 5.8). Il ne reprend pas l'intégralité des attributs de chaque entité, disponibles dans le modèle conceptuel complet (figure 5.2) et dans les diagrammes de classes par contexte borné (section 5.8), mais les champs structurants et la règle de gestion principale associée.
+Tableau 5.5 : Dictionnaire des données — synthèse par entité
+Entité
+Attributs clés
+Bounded context — règle de gestion principale
+Utilisateur
+id, username, role, photo
+BC1 / BC5 — un seul rôle par utilisateur (RG14)
+OrganismeClient
+id, nom, type, adresse
+BC1 — à l'origine d'une commande (RG1)
+Article
+id, designation, classe_comptable, quantite_stock, seuil_securite
+BC1 — référentiel de stock existant
+FamilleProduit
+id, nom, structure_type
+BC1 — NOUVEAU (STI), détermine la décomposition (RG25)
+Produit
+id, id_famille, nom, actif
+BC1 — NOUVEAU (STI), modèle instancié par un devis (RG27)
+Composant
+id, id_produit, ordre, designation
+BC1 — NOUVEAU (STI), numéroté 1..N (RG26)
+LigneMatierePremiere
+id, id_composant, id_article, quantite_unitaire
+BC1 — NOUVEAU (STI), nomenclature du composant
+LigneOperation
+id, id_composant, id_machine, libelle, temps_unitaire
+BC1 — NOUVEAU (STI), gamme du composant
+Machine
+id, nom, cout_horaire
+BC1 — NOUVEAU (STI), poste de production
+Commande
+id, numero, statut, nature, quantite, delai_contractuel
+BC2 — délai obligatoire si non particulier (RG19)
+Devis
+id, id_commande, id_produit_catalogue, prix_revient, prix_vente, pluriannuel
+BC2 — un devis par commande (RG2), instancie un produit (RG27)
+EstimationIA
+id, id_devis, prix_predit, duree_predite, version_modele
+BC2 — une estimation par devis (RG3), repli heuristique (RG20)
+Atelier
+id, nom, id_chef_atelier
+BC3 — SPA / SPB (RG6)
+DossierFabrication
+id, id_commande, numero_dossier, id_atelier, statut_production
+BC3 — créé seulement si commande validée (RG5)
+EtapeProduction
+id, id_dossier, libelle, statut
+BC3 — une ou plusieurs étapes par dossier (RG7)
+MouvementStock
+id, id_article, id_dossier, type_mouvement, quantite
+BC3 — vérification atomique du stock (RG11)
+ControlePrixRevient
+id, id_dossier, id_composant, cout_reel, marge_reelle, resultat
+BC4 — établi seulement à la clôture (RG23), calcul automatique (RG24)
+Facture
+id, id_dossier, numero_facture, type_facture, montant
+BC4 — définitive seulement après clôture (RG13)
+Notification
+id, id_destinataire, categorie, message, lue
+BC5 — émise à chaque changement de statut significatif (RG18)
+5.6  Règles de gestion
+Les règles de gestion ci-dessous reprennent, en les complétant, celles effectivement implémentées et documentées dans le code (contraintes de modèle, méthodes clean(), permissions de vues). Les règles RG21 à RG24 correspondent à des contraintes ajoutées lors du développement ; les règles RG25 à RG28, nouvelles dans la présente mise à jour, formalisent le principe du Catalogue clarifié par le STI (section 5.2.5).
+RG1 : Une commande est passée par un seul organisme client ; un organisme peut passer plusieurs commandes.
+RG2 : Une commande donne lieu à un seul devis (relation univoque).
+RG3 : Un devis peut être complété par une seule estimation IA.
+RG4 : L'estimation IA est calculée automatiquement à la création du devis (prédiction XGBoost, ou repli heuristique).
+RG5 : Un dossier de fabrication n'est créé que pour une commande validée, et une seule fois par commande.
+RG6 : Un dossier de fabrication est affecté à un seul atelier (SPA ou SPB).
+RG7 : Un dossier de fabrication comporte une ou plusieurs étapes de production, rattachées chacune à son dossier.
+RG8 : Un mouvement de stock de sortie peut être rattaché à un dossier de fabrication ; l'affectation d'un dossier à un atelier équilibre la charge entre les machines disponibles.
+RG9 : Un mouvement de stock concerne un seul article.
+RG10 : Un article peut faire l'objet de plusieurs mouvements (entrées et sorties).
+RG11 : Le magasin ne peut valider une sortie que si la quantité en stock est suffisante ; la vérification est atomique afin de résister aux accès concurrents.
+RG12 : Un dossier de fabrication peut donner lieu à plusieurs factures (une proforma puis une définitive).
+RG13 : La facture définitive ne peut être émise qu'après la fin de la production du dossier.
+RG14 : Un utilisateur possède un seul rôle.
+RG15 : Un rôle peut être attribué à plusieurs utilisateurs.
+RG16 : Seul un Agent SDO (ou l'Administrateur) peut créer et valider un devis.
+RG17 : Seul le Chef d'atelier de l'atelier concerné (ou l'Administrateur) peut modifier un dossier ou une étape de production de cet atelier.
+RG18 : Une notification est envoyée à chaque changement de statut d'un dossier, d'une étape, d'un mouvement de stock significatif, ou lors d'un contrôle de prix de revient — dans ce dernier cas, l'Administrateur est également notifié en cas d'écart significatif.
+RG19 : Le délai contractuel est obligatoire pour une commande dont l'organisme n'est pas un particulier.
+RG20 : L'estimation IA ne peut s'appuyer sur le modèle entraîné que si un nombre minimal de devis comparables existe dans l'historique ; en deçà, un repli heuristique est utilisé.
+RG21 : La nature de la commande (sur confection / standardisée) est fixée à la création et ne peut plus être modifiée après validation du devis.
+RG22 : Un devis pluriannuel doit porter une durée de contrat (5 ans maximum) et un taux d'inflation projeté avant de pouvoir être validé.
+RG23 : Le contrôle du prix de revient ne peut être établi qu'après la clôture complète du dossier (statut Terminé), et un dossier ne fait l'objet que d'une seule fiche de contrôle.
+RG24 : Le résultat (bénéficiaire / déficitaire / à l'équilibre), l'écart de prix de revient et le signalement d'écart significatif sont calculés automatiquement à partir du coût réel, du prix de vente du devis et de la marge cible ; ils ne sont jamais saisis manuellement.
+RG25 : Un produit du catalogue appartient à une seule famille de produits, qui détermine son mode de décomposition en composants (mise à jour STI).
+RG26 : Un composant est numéroté de façon unique et ordonnée (1..N) au sein de son produit ; sa nomenclature ne peut être définie que par l'Administrateur (mise à jour STI).
+RG27 : Un devis rattaché à un produit du catalogue calcule son prix de revient en additionnant, pour chaque composant, le coût des lignes de matière première et le coût des lignes d'opération, multipliés par la quantité commandée (mise à jour STI).
+RG28 : Le contrôle du prix de revient à la clôture compare le prévisionnel et le réel composant par composant lorsque le dossier est rattaché à un produit du catalogue (mise à jour STI).
+5.7  Modélisation du domaine
+La figure 5.2 présente le modèle conceptuel de données (MCD) complet du SGCE-INM : dix-neuf classes d'entités, regroupées par bounded context (couleur), avec pour chacune ses attributs typés, sa clé primaire, et les règles de gestion qui la contraignent directement. Les classes teintées en bleu clair (Catalogue) et les attributs annotés « NOUVEAU » correspondent à la clarification du STI (section 5.2.5) et ne sont, à ce stade, qu'une spécification à implémenter plutôt qu'un modèle déjà codé — ce point est rappelé dans la note qui accompagne le diagramme.
+Figure 5.2 : Modèle conceptuel de données complet du SGCE-INM
+Ce modèle se lit en cinq blocs cohérents avec les bounded contexts détaillés en section 5.8 : le Référentiel & Catalogue (Utilisateur, OrganismeClient, Article, et les six classes du catalogue) à gauche ; les Devis & Estimation (Commande, Devis, EstimationIA) au centre ; la Production & Stock (Atelier, DossierFabrication, EtapeProduction, MouvementStock) ; le Contrôle & Facturation (ControlePrixRevient, Facture) à droite ; et la Sécurité & Notifications (Notification), transverse aux quatre autres.
+5.8  Diagrammes de classes de conception par contexte borné
+Plutôt que de regrouper les classes de conception par sprint (choix de la version précédente de ce chapitre, qui mélangeait des préoccupations techniques et fonctionnelles), le système est ici découpé en cinq domaines fonctionnels (bounded contexts), chacun détaillé dans un diagramme dédié. Ce découpage correspond directement à l'organisation des applications Django du dépôt sgce-inm (chapitre 6) et facilite la lecture indépendante de chaque domaine.
+5.8.1  BC1 — Référentiel & Catalogue
+Ce contexte regroupe les entités de référence partagées (Utilisateur, Article) et la structure du Catalogue de produits clarifiée par le STI : une famille détermine le mode de décomposition d'un produit en composants numérotés, chacun porteur de sa nomenclature de matières premières et de sa gamme d'opérations.
+Figure 5.3 : Diagramme de classes — BC1 Référentiel & Catalogue
+5.8.2  BC2 — Devis & Estimation
+Ce contexte couvre l'enregistrement de la commande et l'instanciation du catalogue en devis, affiné par le module d'estimation intelligente. Le point d'implémentation noté sur le diagramme rappelle l'ordre d'exécution attendu entre le calcul déterministe (RG27) et l'appel au module IA.
+Figure 5.4 : Diagramme de classes — BC2 Devis & Estimation
+5.8.3  BC3 — Production & Stock
+Ce contexte couvre la génération et le suivi du dossier de fabrication, ainsi que les mouvements de stock qui lui sont rattachés. La note sur MouvementStock documente une particularité déjà observée dans le code : l'ordre d'exécution du signal post_save par rapport à la mise à jour du stock, qui impose l'usage de transaction.on_commit() pour la notification de seuil.
+Figure 5.5 : Diagramme de classes — BC3 Production & Stock
+5.8.4  BC4 — Contrôle du prix de revient & Facturation
+Ce contexte couvre la clôture du dossier : comparaison automatique du prévisionnel et du réel (composant par composant lorsque le catalogue est renseigné), et émission des factures proforma puis définitive.
+Figure 5.6 : Diagramme de classes — BC4 Contrôle du prix de revient & Facturation
+5.8.5  BC5 — Sécurité & Notifications
+Ce contexte, transverse aux quatre autres, gère les rôles et les notifications déclenchées par les événements significatifs des autres bounded contexts.
+Figure 5.7 : Diagramme de classes — BC5 Sécurité & Notifications
+5.9  Diagramme de classes de conception global
+La figure 5.8 offre une vue d'ensemble simplifiée (sans attributs) du système, où le code couleur reprend celui des cinq bounded contexts détaillés en section 5.8. Elle permet de visualiser en un coup d'œil les points de couplage entre domaines : Devis dépend de Produit (Référentiel & Catalogue), DossierFabrication fait le pont entre Devis & Estimation et Production & Stock, et ControlePrixRevient relie Production & Stock à Contrôle & Facturation.
+Figure 5.8 : Diagramme de classes de conception globale (vue simplifiée)
+5.10  Diagrammes de séquence — cas critiques
+Les diagrammes de séquence ci-après détaillent, pour quatre cas d'utilisation Must have (tableau 5.3), les échanges entre les couches architecturales du système — «Présentation» (React), «Application» (vues et API Django REST Framework), «Domaine» (règles métier) et «Infrastructure» (base Oracle 23ai, module IA, notifications) — construits à partir des permissions et méthodes clean()/save() effectivement présentes dans le code du dépôt sgce-inm.
+5.10.1  UC-02 : création et validation d'un devis (catalogue + IA)
+Ce scénario illustre le principe du Catalogue clarifié par le STI (section 5.2.5) : la sélection d'un produit déclenche un calcul déterministe côté serveur (RG27), complété par une estimation IA, avant que l'Agent SDO ne valide le devis (RG16).
+Figure 5.9 : Diagramme de séquence — UC-02 Créer et valider un devis
+5.10.2  UC-05 : sortie de matière avec vérification de stock
+Ce scénario illustre la vérification atomique du stock disponible (RG11) et le déclenchement de la notification de franchissement de seuil de sécurité, telle qu'implémentée par le signal post_save de MouvementStock (RG18).
+Figure 5.10 : Diagramme de séquence — UC-05 Gérer une sortie de matière
+5.10.3  UC-06 : contrôle du prix de revient à la clôture
+Ce scénario détaille le calcul automatique du résultat et de l'écart significatif (RG24), désormais effectué composant par composant conformément au principe du Catalogue (RG28), ainsi que la notification de l'Administrateur en cas d'écart significatif (RG18).
+Figure 5.11 : Diagramme de séquence — UC-06 Contrôler le prix de revient à la clôture
+5.10.4  UC-03 : génération et ordonnancement du dossier de fabrication
+Ce scénario montre le déclenchement automatique, par signal, de la génération du dossier de fabrication et de ses étapes à la validation du devis (RG4, RG5), ainsi que l'équilibrage de charge entre machines de l'atelier concerné (RG8).
+Figure 5.12 : Diagramme de séquence — UC-03 Générer et ordonnancer le dossier de fabrication
+5.11  Diagramme de paquetage
+Le diagramme de paquetage retenu (figure 5.13) applique, à chacun des cinq bounded contexts (section 5.8), une architecture en couches (présentation / application / domaine / infrastructure), avec un module notifications jouant le rôle de noyau partagé (shared kernel) : chaque contexte y déclenche un signal sans connaître ses consommateurs, cohérent avec l'implémentation réelle (apps/notifications/signals.py). Les dépendances inter-contextes sont annotées de la règle de gestion qui les justifie (ex. « lecture catalogue » RG27 entre devis.application et catalogue.application).
+Figure 5.13 : Diagramme de paquetage — architecture en couches par bounded context
+5.12  Diagramme de déploiement
+Le diagramme de déploiement (figure 5.14) illustre l'infrastructure retenue, conforme à la contrainte institutionnelle de l'INM imposant un hébergement exclusivement local : le frontend React et le backend Django REST Framework sont conteneurisés (Docker) sur un serveur unique du réseau interne, qui communique avec la base Oracle 23ai (FREEPDB1). L'hypothèse de déploiement H-01 (colocalisation applicatif/base sur une seule machine si les moyens matériels de l'INM ne permettent pas deux serveurs distincts) et l'exigence NF-01 de sauvegarde quotidienne sont explicitement annotées sur le diagramme, à la manière d'un cahier des charges technique plutôt que d'un schéma purement illustratif.
+Figure 5.14 : Diagramme de déploiement du SGCE-INM

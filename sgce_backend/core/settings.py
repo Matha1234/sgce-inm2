@@ -99,6 +99,29 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ── CORS ─────────────────────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = True  # uniquement en développement
 
+# ── Email (réinitialisation de mot de passe) ──────────────────────────────
+# SMTP Gmail par défaut : renseigner EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
+# (mot de passe d'application) dans le fichier .env pour un envoi réel.
+# En développement sans SMTP, basculer sur le backend console pour afficher
+# les emails dans le terminal : EMAIL_BACKEND=...console.EmailBackend
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='')
+
+# URL publique du frontend, utilisée pour construire le lien de
+# réinitialisation envoyé par email.
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+
+# Validité du jeton de réinitialisation (30 minutes).
+PASSWORD_RESET_TIMEOUT = 1800
+
 # ── REST Framework ───────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -109,8 +132,8 @@ REST_FRAMEWORK = {
 
 # ── API Documentation ─────────────────────────────────────────────────────
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'SGCE INM API',
-    'DESCRIPTION': 'Système de Gestion des Commandes Étatiques — Imprimerie Nationale de Madagascar',
+    'TITLE': 'SGCFC INM API',
+    'DESCRIPTION': 'Système de Gestion des Coûts, de la Fabrication et du Contrôle du Prix de Revient — Imprimerie Nationale de Madagascar',
     'VERSION': '1.0.0',
 }
 

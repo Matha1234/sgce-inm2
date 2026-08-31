@@ -31,10 +31,15 @@ import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import WavingHandIcon from "@mui/icons-material/WavingHand";
 import CategoryIcon from "@mui/icons-material/Category";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import { alpha } from "@mui/material/styles";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 import { logout, setUtilisateur } from "../store/authSlice";
+import { basculerMode } from "../store/themeSlice";
 import {
   marquerLue, marquerToutesLues, setNotifications, supprimerNotification, viderNotifications,
 } from "../store/notificationsSlice";
@@ -46,12 +51,14 @@ import {
 } from "../api/utilisateursApi";
 import { listerMessagesRecus } from "../api/messagerieApi";
 import { COULEURS_ROLES, LIBELLES_ROLES } from "../constants/roles";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import { useNotifier } from "../components/common/Notifier";
 import logoInm from "../assets/logo-inm.png";
 
-const LARGEUR_SIDEBAR_OUVERTE = 216;
-const LARGEUR_SIDEBAR_REDUITE = 64;
-const CLE_SIDEBAR = "sgce_sidebar_ouverte";
-const CLE_EVENEMENT_AUTH = "sgce_evenement_auth";
+const LARGEUR_SIDEBAR_OUVERTE = 196;
+const LARGEUR_SIDEBAR_REDUITE = 56;
+const CLE_SIDEBAR = "sgcfc_sidebar_ouverte";
+const CLE_EVENEMENT_AUTH = "sgcfc_evenement_auth";
 
 const ELEMENTS_MENU = [
   { label: "Tableau de bord", to: "/", icon: <DashboardIcon />, roles: null },
@@ -99,8 +106,10 @@ function formaterDate(valeur) {
 export default function AppLayout() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { afficherSucces } = useNotifier();
   const { utilisateur } = useSelector((state) => state.auth);
   const { liste: notifications, nonLues } = useSelector((state) => state.notifications);
+  const mode = useSelector((state) => state.theme.mode);
 
   const [sidebarOuverte, setSidebarOuverte] = useState(() => {
     const enregistre = localStorage.getItem(CLE_SIDEBAR);
@@ -114,6 +123,7 @@ export default function AppLayout() {
   const [messagesNonLus, setMessagesNonLus] = useState(0);
   const [evenementAuth, setEvenementAuth] = useState(null);
   const [dialogueDeconnexionOuvert, setDialogueDeconnexionOuvert] = useState(false);
+  const [confirmationViderNotifs, setConfirmationViderNotifs] = useState(false);
   const inputPhotoRef = useRef(null);
 
   const largeurSidebar = sidebarOuverte ? LARGEUR_SIDEBAR_OUVERTE : LARGEUR_SIDEBAR_REDUITE;
@@ -198,13 +208,19 @@ export default function AppLayout() {
     }
   };
 
-  const gererViderNotifications = async () => {
-    dispatch(viderNotifications());
+  const demanderViderNotifications = () => {
     setAncrageNotifs(null);
+    setConfirmationViderNotifs(true);
+  };
+
+  const gererViderNotifications = async () => {
+    setConfirmationViderNotifs(false);
+    dispatch(viderNotifications());
     try {
       await apiSupprimerToutesNotifications();
+      afficherSucces("Toutes les notifications ont été supprimées.");
     } catch {
-      // pas bloquant
+      // pas bloquant : la liste est déjà vidée côté interface
     }
   };
 
@@ -235,6 +251,7 @@ export default function AppLayout() {
     try {
       const utilisateurMisAJour = await mettreAJourPhotoProfil(fichier);
       dispatch(setUtilisateur(utilisateurMisAJour));
+      afficherSucces("Photo de profil mise à jour avec succès.");
     } catch {
       // pas bloquant : la photo precedente (ou les initiales) reste affichee
     } finally {
@@ -253,47 +270,45 @@ export default function AppLayout() {
   const couleurAvatar = COULEURS_ROLES[utilisateur?.role] || "#455A64";
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "grey.50" }}>
+    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
+      {/* ===== Barre supérieure ===== */}
       <AppBar
         position="fixed"
-        elevation={2}
+        elevation={0}
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          bgcolor: "primary.dark",
-          transition: (theme) =>
-            theme.transitions.create(["width", "margin"], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.leavingScreen,
-            }),
+          backgroundImage: (theme) =>
+            `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
+          borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
+          boxShadow: "0 1px 6px rgba(13, 60, 115, 0.3)",
         }}
       >
-        <Toolbar variant="dense" sx={{ display: "flex", justifyContent: "space-between", gap: 2, position: "relative", minHeight: 48 }}>
-          <Stack direction="row" alignItems="center" spacing={1}>
+        <Toolbar sx={{ minHeight: 56, display: "flex", justifyContent: "space-between", gap: 2 }}>
+          <Stack direction="row" alignItems="center" spacing={1.25} sx={{ minWidth: 0 }}>
             <Box
               component="img"
               src={logoInm}
               alt="Logo Imprimerie Nationale de Madagascar"
-              sx={{ height: 28, borderRadius: 1, bgcolor: "#fff", p: 0.3 }}
-            />
-          </Stack>
-
-          <Tooltip title="Système de gestion des coûts, de la fabrication et du contrôle du prix de revient">
-            <Typography
               sx={{
-                position: "absolute",
-                left: "50%",
-                transform: "translateX(-50%)",
-                fontWeight: 800,
-                letterSpacing: 3,
-                fontSize: 15,
-                color: "#fff",
-                cursor: "default",
-                userSelect: "none",
+                height: 34,
+                borderRadius: 1.5,
+                bgcolor: "#fff",
+                p: 0.5,
+                border: "2px solid #fff",
+                boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
+                objectFit: "contain",
               }}
-            >
-              SGCFP
-            </Typography>
-          </Tooltip>
+            />
+            <Box sx={{ display: { xs: "none", sm: "block" }, minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: 15.5, lineHeight: 1.15, color: "#fff", letterSpacing: 0.5 }}>
+                SGCFC-INM
+              </Typography>
+              <Typography sx={{ fontSize: 10.5, lineHeight: 1.2, color: "rgba(255,255,255,0.75)" }} noWrap>
+                Imprimerie Nationale de Madagascar
+              </Typography>
+            </Box>
+          </Stack>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
           <Stack direction="row" alignItems="center" spacing={0.5}>
             <Tooltip title="Notifications">
@@ -307,12 +322,12 @@ export default function AppLayout() {
               anchorEl={ancrageNotifs}
               open={Boolean(ancrageNotifs)}
               onClose={() => setAncrageNotifs(null)}
-              PaperProps={{ sx: { width: 300, maxHeight: 400, borderRadius: 2, overflow: "hidden" } }}
+              PaperProps={{ sx: { width: 320, maxHeight: 420, overflow: "hidden" } }}
             >
               <Box
                 sx={{
                   px: 1.5, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center",
-                  bgcolor: "grey.100",
+                  bgcolor: "action.hover",
                 }}
               >
                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -334,7 +349,7 @@ export default function AppLayout() {
                   )}
                   {notifications.length > 0 && (
                     <Tooltip title="Supprimer toutes les notifications">
-                      <IconButton size="small" color="error" onClick={gererViderNotifications}>
+                      <IconButton size="small" color="error" onClick={demanderViderNotifications}>
                         <DeleteSweepIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -363,7 +378,7 @@ export default function AppLayout() {
                         px: 1.5,
                         borderLeft: "3px solid",
                         borderLeftColor: notification.lue ? "transparent" : "primary.main",
-                        bgcolor: notification.lue ? "transparent" : "primary.50",
+                        bgcolor: notification.lue ? "transparent" : (t) => alpha(t.palette.primary.main, 0.14),
                         "&:hover .bouton-supprimer-notif": { opacity: 1 },
                       }}
                     >
@@ -428,16 +443,21 @@ export default function AppLayout() {
                 </Badge>
               </IconButton>
             </Tooltip>
+            <Tooltip title={mode === "clair" ? "Passer en mode sombre" : "Passer en mode clair"}>
+              <IconButton color="inherit" size="small" onClick={() => dispatch(basculerMode())}>
+                {mode === "clair" ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
             <Menu
               anchorEl={ancrageMessages}
               open={Boolean(ancrageMessages)}
               onClose={() => setAncrageMessages(null)}
-              PaperProps={{ sx: { width: 320, maxHeight: 420, borderRadius: 2, overflow: "hidden" } }}
+              PaperProps={{ sx: { width: 340, maxHeight: 440, overflow: "hidden" } }}
             >
               <Box
                 sx={{
                   px: 1.5, py: 1, display: "flex", justifyContent: "space-between", alignItems: "center",
-                  bgcolor: "grey.100",
+                  bgcolor: "action.hover",
                 }}
               >
                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -472,7 +492,7 @@ export default function AppLayout() {
                         px: 1.5,
                         borderLeft: "3px solid",
                         borderLeftColor: message.lu ? "transparent" : "primary.main",
-                        bgcolor: message.lu ? "transparent" : "primary.50",
+                        bgcolor: message.lu ? "transparent" : (t) => alpha(t.palette.primary.main, 0.14),
                       }}
                     >
                       <Box sx={{ mt: 0.4, color: message.lu ? "text.disabled" : "primary.main", display: "flex" }}>
@@ -517,26 +537,56 @@ export default function AppLayout() {
               </MenuItem>
             </Menu>
 
-            <Tooltip title="Mon profil">
-              <IconButton size="small" onClick={(e) => setAncrageProfil(e.currentTarget)} sx={{ ml: 0.5 }}>
-                <Avatar
-                  src={utilisateur?.photo || undefined}
-                  sx={{ width: 30, height: 30, bgcolor: couleurAvatar, fontSize: 13 }}
-                >
-                  {initialesUtilisateur(utilisateur)}
-                </Avatar>
-              </IconButton>
-            </Tooltip>
+            {/* Profil : avatar à anneau blanc + identité complète */}
+            <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,0.25)", mx: 0.5 }} />
+            <Box
+              onClick={(e) => setAncrageProfil(e.currentTarget)}
+              sx={{
+                ml: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                px: 1,
+                py: 0.5,
+                borderRadius: 2,
+                cursor: "pointer",
+                transition: "background-color 0.15s",
+                "&:hover": { bgcolor: "rgba(255,255,255,0.12)" },
+              }}
+            >
+              <Avatar
+                src={utilisateur?.photo || undefined}
+                sx={{
+                  width: 32,
+                  height: 32,
+                  bgcolor: couleurAvatar,
+                  fontSize: 13,
+                  border: "2px solid #fff",
+                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                {initialesUtilisateur(utilisateur)}
+              </Avatar>
+              <Box sx={{ display: { xs: "none", md: "block" }, minWidth: 0 }}>
+                <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: 13, lineHeight: 1.25 }} noWrap>
+                  {nomComplet(utilisateur)}
+                </Typography>
+                <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: 10.5, lineHeight: 1.25 }} noWrap>
+                  {LIBELLES_ROLES[utilisateur?.role] || utilisateur?.role}
+                </Typography>
+              </Box>
+              <KeyboardArrowDownIcon sx={{ display: { xs: "none", md: "block" }, fontSize: 16, color: "rgba(255,255,255,0.7)" }} />
+            </Box>
             <Menu
               anchorEl={ancrageProfil}
               open={Boolean(ancrageProfil)}
               onClose={() => setAncrageProfil(null)}
-              PaperProps={{ sx: { width: 300, borderRadius: 2, overflow: "hidden" } }}
+              PaperProps={{ sx: { width: 300, overflow: "hidden" } }}
             >
               <Box
                 sx={{
                   px: 2.5, py: 2.5, display: "flex", flexDirection: "column", alignItems: "center",
-                  textAlign: "center", bgcolor: "grey.100",
+                  textAlign: "center", bgcolor: "action.hover",
                 }}
               >
                 <Box sx={{ position: "relative", mb: 1 }}>
@@ -636,50 +686,61 @@ export default function AppLayout() {
         </Toolbar>
       </AppBar>
 
+      {/* ===== Barre latérale ===== */}
       <Drawer
         variant="permanent"
         sx={{
           width: largeurSidebar,
           flexShrink: 0,
           whiteSpace: "nowrap",
+          transition: (theme) =>
+            theme.transitions.create("width", {
+              easing: theme.transitions.easing.easeInOut,
+              duration: 100,
+            }),
           [`& .MuiDrawer-paper`]: {
             width: largeurSidebar,
             boxSizing: "border-box",
             overflowX: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid rgba(13, 60, 115, 0.08)",
             transition: (theme) =>
               theme.transitions.create("width", {
                 easing: theme.transitions.easing.easeInOut,
-                duration: 220,
+                duration: 100,
               }),
           },
         }}
       >
-        <Toolbar variant="dense" sx={{ minHeight: 48 }} />
+        <Toolbar sx={{ minHeight: 56 }} />
 
-        <Tooltip title={sidebarOuverte ? "Réduire le menu" : "Ouvrir le menu"} placement="right">
-          <Box
-            onClick={basculerSidebar}
-            sx={{
-              width: "100%",
-              height: 40,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: sidebarOuverte ? "flex-end" : "center",
-              px: sidebarOuverte ? 1.5 : 0,
-              cursor: "pointer",
-              color: "text.secondary",
-              borderBottom: "1px solid",
-              borderColor: "divider",
-              transition: "background-color 0.15s",
-              "&:hover": { bgcolor: "action.hover" },
-              "&:active": { bgcolor: "action.selected" },
-            }}
-          >
-            {sidebarOuverte ? <ChevronLeftIcon fontSize="small" /> : <MenuIcon fontSize="small" />}
-          </Box>
-        </Tooltip>
+        {/* Bascule réduire / étendre (icône seule, collée au bord droit) */}
+        <Box
+          onClick={basculerSidebar}
+          sx={{
+            alignSelf: "flex-end",
+            mr: 1.25,
+            mb: 0.75,
+            width: 30,
+            height: 30,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 1.5,
+            cursor: "pointer",
+            color: "text.secondary",
+            border: "1px solid",
+            borderColor: "divider",
+            transition: "background-color 0.15s",
+            "&:hover": { bgcolor: "action.hover" },
+            "&:active": { bgcolor: "action.selected" },
+          }}
+        >
+          {sidebarOuverte ? <ChevronLeftIcon fontSize="small" /> : <MenuIcon fontSize="small" />}
+        </Box>
 
-        <List sx={{ mt: 1 }}>
+        <List sx={{ px: 1 }}>
           {menuVisible.map((item) => {
             const bouton = (
               <ListItemButton
@@ -688,27 +749,40 @@ export default function AppLayout() {
                 to={item.to}
                 end={item.to === "/"}
                 sx={{
-                  minHeight: 44,
-                  mx: 1,
+                  minHeight: 40,
                   mb: 0.5,
-                  borderRadius: 1.5,
+                  borderRadius: 2,
                   justifyContent: sidebarOuverte ? "flex-start" : "center",
-                  px: sidebarOuverte ? 2 : 1.5,
+                  px: sidebarOuverte ? 1.25 : 0,
+                  gap: 0.5,
+                  color: "text.primary",
                   transition: "background-color 0.15s, transform 0.1s",
-                  "&:hover": { bgcolor: "action.hover" },
-                  "&:active": { transform: "scale(0.97)" },
+                  "&:hover": { bgcolor: (t) => alpha(t.palette.primary.main, 0.1) },
+                  "&:active": { transform: "scale(0.98)" },
                   "&.active": {
                     bgcolor: "primary.main",
                     color: "primary.contrastText",
+                    boxShadow: "0 2px 6px rgba(21, 101, 192, 0.35)",
                     "& .MuiListItemIcon-root": { color: "primary.contrastText" },
                     "&:hover": { bgcolor: "primary.main" },
                   },
                 }}
               >
-                <ListItemIcon sx={{ minWidth: sidebarOuverte ? 36 : "auto", justifyContent: "center" }}>
+                <ListItemIcon
+                  sx={{
+                    minWidth: sidebarOuverte ? 32 : "auto",
+                    justifyContent: "center",
+                    color: "text.secondary",
+                  }}
+                >
                   {item.icon}
                 </ListItemIcon>
-                {sidebarOuverte && <ListItemText primary={item.label} />}
+                {sidebarOuverte && (
+                  <ListItemText
+                    primary={item.label}
+                    slotProps={{ primary: { fontSize: 13, fontWeight: 600 } }}
+                  />
+                )}
               </ListItemButton>
             );
             return sidebarOuverte ? (
@@ -720,26 +794,83 @@ export default function AppLayout() {
             );
           })}
         </List>
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        {/* Carte utilisateur en pied de sidebar */}
+        <Box
+          sx={{
+            m: 1,
+            mt: 0,
+            p: sidebarOuverte ? 1 : 0.75,
+            borderRadius: 2.5,
+            bgcolor: "action.hover",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          {sidebarOuverte ? (
+            <Stack direction="row" alignItems="center" spacing={1.25}>
+              <Avatar
+                src={utilisateur?.photo || undefined}
+                sx={{ width: 32, height: 32, bgcolor: couleurAvatar, fontSize: 13 }}
+              >
+                {initialesUtilisateur(utilisateur)}
+              </Avatar>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                  {nomComplet(utilisateur)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {LIBELLES_ROLES[utilisateur?.role] || utilisateur?.role}
+                </Typography>
+              </Box>
+              <Tooltip title="Déconnexion">
+                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main" }}>
+                  <LogoutIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          ) : (
+            <Stack alignItems="center" spacing={0.75}>
+              <Tooltip title={nomComplet(utilisateur)} placement="right">
+                <Avatar
+                  src={utilisateur?.photo || undefined}
+                  sx={{ width: 32, height: 32, bgcolor: couleurAvatar, fontSize: 13 }}
+                >
+                  {initialesUtilisateur(utilisateur)}
+                </Avatar>
+              </Tooltip>
+              <Tooltip title="Déconnexion" placement="right">
+                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main" }}>
+                  <LogoutIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          )}
+        </Box>
       </Drawer>
 
+      {/* ===== Contenu principal ===== */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, sm: 3 },
           minWidth: 0,
+          overflow: "auto",
           transition: (theme) =>
             theme.transitions.create("margin", {
               easing: theme.transitions.easing.easeInOut,
-              duration: 220,
+              duration: 100,
             }),
         }}
       >
-        <Toolbar variant="dense" sx={{ minHeight: 48 }} />
+        <Toolbar sx={{ minHeight: 56 }} />
         <Outlet />
       </Box>
 
-      <Dialog open={Boolean(evenementAuth)} onClose={() => setEvenementAuth(null)} maxWidth="xs" fullWidth>
+      <Dialog open={Boolean(evenementAuth)} onClose={() => setEvenementAuth(null)} maxWidth="xs">
         <DialogContent sx={{ textAlign: "center", py: 4 }}>
           {evenementAuth?.type === "connexion" ? (
             <>
@@ -748,7 +879,7 @@ export default function AppLayout() {
                 Bienvenue{evenementAuth?.nom ? `, ${evenementAuth.nom}` : ""} !
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Vous êtes connecté avec succès au SGCE-INM.
+                Vous êtes connecté avec succès au SGCFC-INM.
               </Typography>
             </>
           ) : (
@@ -758,7 +889,7 @@ export default function AppLayout() {
                 Déconnexion réussie
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                À bientôt sur le SGCE-INM.
+                À bientôt sur le SGCFC-INM.
               </Typography>
             </>
           )}
@@ -770,11 +901,21 @@ export default function AppLayout() {
         </DialogActions>
       </Dialog>
 
+      <ConfirmDialog
+        ouvert={confirmationViderNotifs}
+        titre="Effacer toutes les notifications ?"
+        message={`${notifications.length} notification${notifications.length > 1 ? "s" : ""} seront définitivement supprimées. Cette action est irréversible.`}
+        icone={<DeleteSweepIcon />}
+        couleur="error"
+        texteConfirmer="Tout effacer"
+        onConfirmer={gererViderNotifications}
+        onAnnuler={() => setConfirmationViderNotifs(false)}
+      />
+
       <Dialog
         open={dialogueDeconnexionOuvert}
         onClose={annulerDeconnexion}
         maxWidth="xs"
-        fullWidth
       >
         <DialogContent sx={{ textAlign: "center", py: 4 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
