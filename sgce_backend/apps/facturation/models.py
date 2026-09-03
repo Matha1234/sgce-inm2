@@ -17,6 +17,11 @@ class Facture(models.Model):
         PROFORMA = "PROFORMA", "Facture proforma"
         DEFINITIVE = "DEFINITIVE", "Facture définitive"
 
+    class StatutPaiement(models.TextChoices):
+        EN_ATTENTE = "EN_ATTENTE", "En attente"
+        PAYEE = "PAYEE", "Payée"
+        IMPAYEE = "IMPAYEE", "Impayée"
+
     dossier = models.ForeignKey(
         DossierFabrication, on_delete=models.PROTECT, related_name="factures"
     )
@@ -25,6 +30,10 @@ class Facture(models.Model):
         max_length=15, choices=TypeFacture.choices, default=TypeFacture.PROFORMA
     )
     montant = models.DecimalField(max_digits=12, decimal_places=2)
+    statut_paiement = models.CharField(
+        max_length=15, choices=StatutPaiement.choices, default=StatutPaiement.EN_ATTENTE,
+        help_text="Statut de paiement de la facture.",
+    )
     date_facture = models.DateTimeField(auto_now_add=True)
     emise_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,

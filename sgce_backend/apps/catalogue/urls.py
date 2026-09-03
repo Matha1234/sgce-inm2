@@ -10,8 +10,8 @@ from .views import (
     LigneMatierePremiereListCreateView,
     LigneOperationDetailView,
     LigneOperationListCreateView,
-    MachineDetailView,
-    MachineListCreateView,
+    PosteDeChargeDetailView,
+    PosteDeChargeListCreateView,
     ProduitDetailView,
     ProduitListCreateView,
 )
@@ -26,8 +26,8 @@ urlpatterns = [
     path("catalogue/composants/", ComposantListCreateView.as_view(), name="composant-list"),
     path("catalogue/composants/<int:pk>/", ComposantDetailView.as_view(), name="composant-detail"),
 
-    path("catalogue/machines/", MachineListCreateView.as_view(), name="machine-list"),
-    path("catalogue/machines/<int:pk>/", MachineDetailView.as_view(), name="machine-detail"),
+    path("catalogue/postes-de-charge/", PosteDeChargeListCreateView.as_view(), name="poste-charge-list"),
+    path("catalogue/postes-de-charge/<int:pk>/", PosteDeChargeDetailView.as_view(), name="poste-charge-detail"),
 
     path("catalogue/lignes-matiere/", LigneMatierePremiereListCreateView.as_view(), name="ligne-matiere-list"),
     path("catalogue/lignes-matiere/<int:pk>/", LigneMatierePremiereDetailView.as_view(), name="ligne-matiere-detail"),

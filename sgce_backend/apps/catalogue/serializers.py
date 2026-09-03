@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from .models import Composant, FamilleProduit, LigneMatierePremiere, LigneOperation, Machine, Produit
+from .models import (
+    Composant,
+    FamilleProduit,
+    LigneMatierePremiere,
+    LigneOperation,
+    PosteDeCharge,
+    Produit,
+)
 
 
 class FamilleProduitSerializer(serializers.ModelSerializer):
@@ -9,32 +16,37 @@ class FamilleProduitSerializer(serializers.ModelSerializer):
         fields = ["id", "nom", "structure_type"]
 
 
-class MachineSerializer(serializers.ModelSerializer):
+class PosteDeChargeSerializer(serializers.ModelSerializer):
+    type_poste_libelle = serializers.CharField(source="get_type_poste_display", read_only=True)
+
     class Meta:
-        model = Machine
-        fields = ["id", "nom", "cout_horaire"]
+        model = PosteDeCharge
+        fields = ["id", "nom", "type_poste", "type_poste_libelle", "cout_horaire"]
 
 
 class LigneMatierePremiereSerializer(serializers.ModelSerializer):
     article_designation = serializers.CharField(source="article.designation", read_only=True)
     article_unite = serializers.CharField(source="article.unite", read_only=True)
+    type_charge_libelle = serializers.CharField(source="get_type_charge_display", read_only=True)
 
     class Meta:
         model = LigneMatierePremiere
         fields = [
             "id", "composant", "article", "article_designation", "article_unite",
-            "quantite_unitaire", "formule_calcul",
+            "quantite_unitaire", "type_charge", "type_charge_libelle", "formule_calcul",
         ]
 
 
 class LigneOperationSerializer(serializers.ModelSerializer):
-    machine_nom = serializers.CharField(source="machine.nom", read_only=True)
+    poste_nom = serializers.CharField(source="poste.nom", read_only=True)
+    poste_type_libelle = serializers.CharField(source="poste.get_type_poste_display", read_only=True)
+    type_charge_libelle = serializers.CharField(source="get_type_charge_display", read_only=True)
 
     class Meta:
         model = LigneOperation
         fields = [
-            "id", "composant", "machine", "machine_nom", "libelle",
-            "temps_unitaire", "formule_calcul",
+            "id", "composant", "poste", "poste_nom", "poste_type_libelle", "libelle",
+            "temps_unitaire", "type_charge", "type_charge_libelle", "formule_calcul",
         ]
 
 
@@ -72,7 +84,8 @@ class ProduitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Produit
         fields = [
-            "id", "famille", "famille_nom", "nom", "actif",
+            "id", "famille", "famille_nom", "reference", "nom", "description", "actif",
+            "marge_min", "marge_max", "date_maj",
             "composants", "nombre_composants",
         ]
 
@@ -86,10 +99,11 @@ class ProduitEstimationInputSerializer(serializers.Serializer):
     def calculer(self):
         produit = self.validated_data["produit"]
         quantite = self.validated_data["quantite"]
-        prix_revient = produit.calculer_prix_revient(quantite)
+        resultat = produit.calculer_prix_revient(quantite)
         return {
             "produit": produit.id,
             "produit_nom": produit.nom,
             "quantite": quantite,
-            "prix_revient_catalogue": prix_revient,
+            "prix_revient_catalogue": resultat["prix_revient"],
+            "detail_composants": resultat["detail_composants"],
         }

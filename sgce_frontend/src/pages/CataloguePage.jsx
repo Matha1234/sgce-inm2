@@ -12,15 +12,16 @@ import CategoryIcon from "@mui/icons-material/Category";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 
 import {
-  creerComposant, creerFamille, creerLigneMatiere, creerLigneOperation, creerMachine,
-  creerProduit, listerFamilles, listerMachines, listerProduits, recupererProduit,
-  supprimerComposant, supprimerFamille, supprimerLigneMatiere, supprimerLigneOperation,
-  supprimerProduit,
+  creerComposant, creerFamille, creerLigneMatiere, creerLigneOperation,
+  creerPosteDeCharge, creerProduit, listerFamilles, listerPostesDeCharge,
+  listerProduits, recupererProduit, supprimerComposant, supprimerFamille,
+  supprimerLigneMatiere, supprimerLigneOperation, supprimerProduit,
 } from "../api/catalogueApi";
 import { listerArticles } from "../api/commandesApi";
 import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import { useNotifier } from "../components/common/Notifier";
+import BoutonExport from "../components/common/BoutonExport";
 import { alpha } from "@mui/material/styles";
 
 const LIBELLES_FAMILLE = {
@@ -28,6 +29,16 @@ const LIBELLES_FAMILLE = {
   BROCHURE: "Brochure",
   MAGAZINE_LIVRE: "Magazine / Livre / Agenda",
   CARNET_REGISTRE: "Carnet de factures / Registre",
+};
+
+const LIBELLES_TYPE_POSTE = {
+  MACHINE: "Machine (amortissement + électricité)",
+  MANUEL: "Manuel (main-d'œuvre directe)",
+};
+
+const LIBELLES_TYPE_CHARGE = {
+  FIXE: "Fixe",
+  VARIABLE: "Variable",
 };
 
 function normaliser(d) {
@@ -41,7 +52,7 @@ export default function CataloguePage() {
   const [familles, setFamilles] = useState([]);
   const [produits, setProduits] = useState([]);
   const [articles, setArticles] = useState([]);
-  const [machines, setMachines] = useState([]);
+  const [postesDeCharge, setPostesDeCharge] = useState([]);
 
   const [produitSelectionne, setProduitSelectionne] = useState(null);
   const [chargementDetail, setChargementDetail] = useState(false);
@@ -52,8 +63,8 @@ export default function CataloguePage() {
   const [dialogueProduit, setDialogueProduit] = useState(false);
   const [nouveauProduit, setNouveauProduit] = useState({ famille: "", nom: "" });
 
-  const [dialogueMachine, setDialogueMachine] = useState(false);
-  const [nouvelleMachine, setNouvelleMachine] = useState({ nom: "", cout_horaire: "" });
+  const [dialoguePoste, setDialoguePoste] = useState(false);
+  const [nouveauPoste, setNouveauPoste] = useState({ nom: "", type_poste: "MACHINE", cout_horaire: "" });
 
   const [nouveauComposant, setNouveauComposant] = useState({ ordre: "", designation: "" });
   const [nouvelleLigneMatiere, setNouvelleLigneMatiere] = useState({});
@@ -64,13 +75,13 @@ export default function CataloguePage() {
     setChargement(true);
     setErreur("");
     try {
-      const [f, p, a, m] = await Promise.all([
-        listerFamilles(), listerProduits(), listerArticles(), listerMachines(),
+      const [f, p, a, pc] = await Promise.all([
+        listerFamilles(), listerProduits(), listerArticles(), listerPostesDeCharge(),
       ]);
       setFamilles(normaliser(f));
       setProduits(normaliser(p));
       setArticles(normaliser(a));
-      setMachines(normaliser(m));
+      setPostesDeCharge(normaliser(pc));
     } catch {
       setErreur("Impossible de charger le catalogue.");
     } finally {
@@ -123,15 +134,15 @@ export default function CataloguePage() {
     }
   };
 
-  const gererCreationMachine = async () => {
+  const gererCreationPoste = async () => {
     try {
-      await creerMachine(nouvelleMachine);
-      afficherSucces("Machine créée avec succès.");
-      setDialogueMachine(false);
-      setNouvelleMachine({ nom: "", cout_horaire: "" });
+      await creerPosteDeCharge(nouveauPoste);
+      afficherSucces("Poste de charge créé avec succès.");
+      setDialoguePoste(false);
+      setNouveauPoste({ nom: "", type_poste: "MACHINE", cout_horaire: "" });
       charger();
     } catch {
-      setErreur("Impossible de créer cette machine.");
+      setErreur("Impossible de créer ce poste de charge.");
     }
   };
 
@@ -158,6 +169,7 @@ export default function CataloguePage() {
         composant: composantId,
         article: valeurs.article,
         quantite_unitaire: valeurs.quantite_unitaire,
+        type_charge: valeurs.type_charge || "VARIABLE",
       });
       afficherSucces("Ligne de matière première ajoutée avec succès.");
       setNouvelleLigneMatiere((s) => ({ ...s, [composantId]: {} }));
@@ -169,13 +181,14 @@ export default function CataloguePage() {
 
   const gererAjoutLigneOperation = async (composantId) => {
     const valeurs = nouvelleLigneOperation[composantId] || {};
-    if (!valeurs.machine || !valeurs.libelle || !valeurs.temps_unitaire) return;
+    if (!valeurs.poste || !valeurs.libelle || !valeurs.temps_unitaire) return;
     try {
       await creerLigneOperation({
         composant: composantId,
-        machine: valeurs.machine,
+        poste: valeurs.poste,
         libelle: valeurs.libelle,
         temps_unitaire: valeurs.temps_unitaire,
+        type_charge: valeurs.type_charge || "VARIABLE",
       });
       afficherSucces("Ligne d'opération ajoutée avec succès.");
       setNouvelleLigneOperation((s) => ({ ...s, [composantId]: {} }));
@@ -252,6 +265,101 @@ export default function CataloguePage() {
         centre
         taillePastille={28}
         titreVariant="h6"
+        action={
+          <BoutonExport
+            surExcel={async () => {
+              const e = await import("../utils/exportateur");
+              const nomComposants = (c) => {
+                if (!c || !c.composants) return [];
+                const out = [];
+                c.composants.forEach((cp) => {
+                  out.push({
+                    composant: `${cp.ordre} — ${cp.designation}`,
+                    type: "Composant",
+                    designation: "",
+                    quantite: "",
+                    cout: "",
+                  });
+                  (cp.lignes_matiere_premiere || []).forEach((l) => {
+                    out.push({
+                      composant: "",
+                      type: "Matière",
+                      designation: l.article_designation,
+                      quantite: `${l.quantite_unitaire} ${l.article_unite || ""}/ex`,
+                      cout: `${l.type_charge === "FIXE" ? "F" : "V"}`,
+                    });
+                  });
+                  (cp.lignes_operation || []).forEach((l) => {
+                    out.push({
+                      composant: "",
+                      type: "Opération",
+                      designation: `${l.libelle} — ${l.poste_nom}`,
+                      quantite: `${l.temps_unitaire} min/ex`,
+                      cout: `${l.type_charge === "FIXE" ? "F" : "V"}`,
+                    });
+                  });
+                });
+                return out;
+              };
+              const feuilles = [
+                {
+                  nom: "Produits", titre: "Catalogue de produits",
+                  meta: e.metaEdition(produits.length),
+                  colonnes: [
+                    e.colonne("Produit", "nom", "left"),
+                    e.colonnePerso("Famille", (p) => LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom, "left"),
+                    e.colonnePerso("Composants", (p) => String(p.nombre_composants)),
+                    e.colonnePerso("Actif", (p) => p.actif ? "Oui" : "Non"),
+                  ],
+                  lignes: produits,
+                },
+                {
+                  nom: "Postes de charge", titre: "Postes de charge",
+                  meta: e.metaEdition(postesDeCharge.length),
+                  colonnes: [
+                    e.colonne("Poste", "nom", "left"),
+                    e.colonnePerso("Type", (p) => LIBELLES_TYPE_POSTE[p.type_poste] || p.type_poste, "left"),
+                    e.colonnePerso("Coût horaire", (p) => `${Number(p.cout_horaire).toLocaleString("fr-FR")} Ar`, "right"),
+                  ],
+                  lignes: postesDeCharge,
+                },
+              ];
+              if (produitSelectionne) {
+                const lignesNom = nomComposants(produitSelectionne);
+                feuilles.push({
+                  nom: "Nomenclature", titre: `Nomenclature — ${produitSelectionne.nom}`,
+                  meta: e.metaEdition(lignesNom.length),
+                  colonnes: [
+                    e.colonnePerso("Composant", (l) => l.composant, "left"),
+                    e.colonnePerso("Type", (l) => l.type),
+                    e.colonnePerso("Désignation", (l) => l.designation, "left"),
+                    e.colonne("Quantité", "quantite", "left"),
+                    e.colonnePerso("Charge", (l) => l.cout),
+                  ],
+                  lignes: lignesNom,
+                });
+              }
+              await e.exporterExcel({ fichier: `Catalogue_${Date.now()}.xlsx`, feuilles });
+            }}
+            surPdf={async () => {
+              const e = await import("../utils/exportateur");
+              await e.exporterPDF({
+                fichier: `Catalogue_${Date.now()}.pdf`,
+                titre: "Catalogue de produits",
+                meta: e.metaEdition(produits.length),
+                colonnes: [
+                  e.colonne("Produit", "nom", "left"),
+                  e.colonnePerso("Famille", (p) => LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom, "left"),
+                  e.colonnePerso("Composants", (p) => String(p.nombre_composants)),
+                  e.colonnePerso("Actif", (p) => p.actif ? "Oui" : "Non"),
+                ],
+                lignes: produits,
+              });
+            }}
+            libelle="Exporter"
+            taille="small"
+          />
+        }
       />
 
       {erreur && <Alert severity="warning" sx={{ mb: 1.5, flexShrink: 0 }} onClose={() => setErreur("")}>{erreur}</Alert>}
@@ -261,7 +369,7 @@ export default function CataloguePage() {
           <Grid size={{ xs: 12, md: 4 }} sx={{ display: "flex", flexDirection: "column" }}>
           <Stack spacing={1.5}>
             <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 1.5, flexShrink: 0 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pl: 2, pr: 1, py: 1.5, flexShrink: 0 }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>Produits ({produits.length})</Typography>
                 <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setDialogueProduit(true)}>
                   Nouveau
@@ -301,7 +409,7 @@ export default function CataloguePage() {
             </Paper>
 
             <Paper variant="outlined" sx={{ borderRadius: 2 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, pt: 1.5, pb: 1 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pl: 2, pr: 1, py: 1.5 }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>Familles</Typography>
                 <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setDialogueFamille(true)}>
                   Ajouter
@@ -400,9 +508,12 @@ export default function CataloguePage() {
                                 <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
                                   {l.article_designation} — {l.quantite_unitaire} {l.article_unite}/ex
                                 </Typography>
-                                <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)} sx={{ width: 22, height: 22 }}>
-                                  <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                </IconButton>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                  <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
+                                  <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)} sx={{ width: 22, height: 22 }}>
+                                    <DeleteOutlineIcon sx={{ fontSize: 12 }} />
+                                  </IconButton>
+                                </Stack>
                               </Stack>
                             ))}
                             <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }}>
@@ -420,6 +531,15 @@ export default function CataloguePage() {
                                 value={nouvelleLigneMatiere[composant.id]?.quantite_unitaire || ""}
                                 onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], quantite_unitaire: e.target.value } }))}
                               />
+                              <TextField
+                                select size="small" label="Charge"
+                                sx={{ minWidth: 88, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
+                                value={nouvelleLigneMatiere[composant.id]?.type_charge || "VARIABLE"}
+                                onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
+                              >
+                                <MenuItem value="VARIABLE" sx={{ fontSize: 12 }}>Variable</MenuItem>
+                                <MenuItem value="FIXE" sx={{ fontSize: 12 }}>Fixe</MenuItem>
+                              </TextField>
                               <Button variant="contained" size="small" onClick={() => gererAjoutLigneMatiere(composant.id)} sx={{ minWidth: 32, px: 1 }}>
                                 <AddIcon fontSize="small" />
                               </Button>
@@ -439,11 +559,14 @@ export default function CataloguePage() {
                             {composant.lignes_operation.map((l) => (
                               <Stack key={l.id} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.2 }}>
                                 <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
-                                  {l.libelle} — {l.machine_nom} ({l.temps_unitaire} min/ex)
+                                  {l.libelle} — {l.poste_nom} ({l.temps_unitaire} min/ex)
                                 </Typography>
-                                <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)} sx={{ width: 22, height: 22 }}>
-                                  <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                </IconButton>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                  <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
+                                  <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)} sx={{ width: 22, height: 22 }}>
+                                    <DeleteOutlineIcon sx={{ fontSize: 12 }} />
+                                  </IconButton>
+                                </Stack>
                               </Stack>
                             ))}
                             <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
@@ -454,12 +577,21 @@ export default function CataloguePage() {
                                 onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], libelle: e.target.value } }))}
                               />
                               <TextField
-                                select size="small" label="Machine"
+                                select size="small" label="Poste"
                                 sx={{ minWidth: 95, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneOperation[composant.id]?.machine || ""}
-                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], machine: e.target.value } }))}
+                                value={nouvelleLigneOperation[composant.id]?.poste || ""}
+                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], poste: e.target.value } }))}
                               >
-                                {machines.map((m) => <MenuItem key={m.id} value={m.id} sx={{ fontSize: 12 }}>{m.nom}</MenuItem>)}
+                                {postesDeCharge.map((p) => <MenuItem key={p.id} value={p.id} sx={{ fontSize: 12 }}>{p.nom}</MenuItem>)}
+                              </TextField>
+                              <TextField
+                                select size="small" label="Charge"
+                                sx={{ minWidth: 88, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
+                                value={nouvelleLigneOperation[composant.id]?.type_charge || "VARIABLE"}
+                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
+                              >
+                                <MenuItem value="VARIABLE" sx={{ fontSize: 12 }}>Variable</MenuItem>
+                                <MenuItem value="FIXE" sx={{ fontSize: 12 }}>Fixe</MenuItem>
                               </TextField>
                               <TextField
                                 size="small" label="Min" type="number"
@@ -471,8 +603,8 @@ export default function CataloguePage() {
                                 <AddIcon fontSize="small" />
                               </Button>
                             </Stack>
-                            <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setDialogueMachine(true)} sx={{ mt: 0.75, px: 1.5, fontSize: 12 }}>
-                              + Machine
+                            <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setDialoguePoste(true)} sx={{ mt: 0.75, px: 1.5, fontSize: 12 }}>
+                              + Poste de charge
                             </Button>
                           </Grid>
                         </Grid>
@@ -568,31 +700,39 @@ export default function CataloguePage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialogueMachine} onClose={() => setDialogueMachine(false)} maxWidth="xs">
+      <Dialog open={dialoguePoste} onClose={() => setDialoguePoste(false)} maxWidth="xs">
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
             <PastilleIcone icone={<PrecisionManufacturingIcon sx={{ fontSize: 18 }} />} taille={32} />
             <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-              Nouvelle machine / poste
+              Nouveau poste de charge
             </Typography>
           </Stack>
-          <IconButton onClick={() => setDialogueMachine(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
+          <IconButton onClick={() => setDialoguePoste(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Nom" value={nouvelleMachine.nom}
-              onChange={(e) => setNouvelleMachine((s) => ({ ...s, nom: e.target.value }))}
+              label="Nom" value={nouveauPoste.nom}
+              onChange={(e) => setNouveauPoste((s) => ({ ...s, nom: e.target.value }))}
             />
             <TextField
-              label="Coût horaire" type="number" value={nouvelleMachine.cout_horaire}
-              onChange={(e) => setNouvelleMachine((s) => ({ ...s, cout_horaire: e.target.value }))}
+              select label="Type de poste" value={nouveauPoste.type_poste}
+              onChange={(e) => setNouveauPoste((s) => ({ ...s, type_poste: e.target.value }))}
+            >
+              {Object.entries(LIBELLES_TYPE_POSTE).map(([code, libelle]) => (
+                <MenuItem key={code} value={code}>{libelle}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Coût horaire" type="number" value={nouveauPoste.cout_horaire}
+              onChange={(e) => setNouveauPoste((s) => ({ ...s, cout_horaire: e.target.value }))}
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setDialogueMachine(false)} sx={{ px: 1.5 }}>Annuler</Button>
-          <Button variant="contained" disableElevation onClick={gererCreationMachine}>Créer</Button>
+          <Button variant="outlined" onClick={() => setDialoguePoste(false)} sx={{ px: 1.5 }}>Annuler</Button>
+          <Button variant="contained" disableElevation onClick={gererCreationPoste}>Créer</Button>
         </DialogActions>
       </Dialog>
 

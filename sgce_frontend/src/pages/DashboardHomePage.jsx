@@ -23,6 +23,7 @@ import { listerCommandes, listerDossiers, listerArticles } from "../api/commande
 import { recupererTableauBordRentabilite } from "../api/controleApi";
 import { COULEURS_STATUT_COMMANDE, LIBELLES_STATUT_COMMANDE } from "../constants/roles";
 import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
+import BoutonExport from "../components/common/BoutonExport";
 
 // Correspondance entre les noms de couleur MUI utilisés par
 // COULEURS_STATUT_COMMANDE (déjà utilisé pour les Chips de statut ailleurs
@@ -180,6 +181,57 @@ export default function DashboardHomePage() {
         centre
         action={
           <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+            <BoutonExport
+              surPdf={async () => {
+                const e = await import("../utils/exportateur");
+                const metas = [];
+                if (role === "ADMIN" || role === "AGENT_SDO") {
+                  metas.push(
+                    { libelle: "Commandes", valeur: String(commandes.length) },
+                    { libelle: "Devis en cours", valeur: String(devisEnCours) },
+                    { libelle: "Validées", valeur: String(commandes.filter((c) => c.statut === "VALIDEE").length) },
+                  );
+                }
+                if (role === "ADMIN" || role === "CHEF_ATELIER") {
+                  metas.push(
+                    { libelle: "Dossiers", valeur: String(dossiers.length) },
+                    { libelle: "En production", valeur: String(dossiersEnCours.length) },
+                  );
+                }
+                if (role === "ADMIN" || role === "MAGASINIER") {
+                  metas.push(
+                    { libelle: "Articles en alerte", valeur: String(articlesEnAlerte.length) },
+                  );
+                }
+                if (role === "ADMIN" && rentabilite) {
+                  metas.push(
+                    { libelle: "Fiches de contrôle", valeur: String(rentabilite.nombre_controles) },
+                    { libelle: "Sous-marge", valeur: String(rentabilite.nombre_sous_marge) },
+                    { libelle: "Dans la norme", valeur: String(rentabilite.nombre_dans_la_norme) },
+                    { libelle: "Sur-marge", valeur: String(rentabilite.nombre_sur_marge) },
+                    { libelle: "Marge moyenne", valeur: `${rentabilite.marge_moyenne_pourcentage}%` },
+                  );
+                }
+                await e.exporterPDF({
+                  fichier: `Tableau_de_bord_${Date.now()}.pdf`,
+                  titre: "Tableau de bord SGCFC",
+                  sousTitre: `Rapport g\u00e9n\u00e9r\u00e9 le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}`,
+                  meta: metas,
+                  colonnes: (role === "ADMIN" || role === "AGENT_SDO") && donneesGraphique.length > 0
+                    ? [
+                        e.colonnePerso("Statut commande", (d) => d.statut, "left"),
+                        e.colonnePerso("Nombre", (d) => String(d.nombre), "right"),
+                      ]
+                    : [],
+                  lignes: (role === "ADMIN" || role === "AGENT_SDO") ? donneesGraphique : [],
+                  note: role === "ADMIN" && rentabilite
+                     ? `Rentabilité : ${rentabilite.nombre_sous_marge} sous-marge, ${rentabilite.nombre_dans_la_norme} dans la norme, ${rentabilite.nombre_sur_marge} sur-marge, ${rentabilite.marge_moyenne_pourcentage}% de marge moyenne.`
+                    : "",
+                });
+              }}
+              libelle="Exporter"
+              compact
+            />
             {derniereMiseAJour && (
               <Typography variant="caption" color="text.disabled">
                 Actualisé à {derniereMiseAJour.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
@@ -325,26 +377,26 @@ export default function DashboardHomePage() {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre
-                titre="Dossiers bénéficiaires"
-                valeur={rentabilite.nombre_beneficiaires}
-                icone={<TrendingUpIcon sx={{ fontSize: 20 }} />}
-                couleur="success.main"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <CarteChiffre
-                titre="Dossiers déficitaires"
-                valeur={rentabilite.nombre_deficitaires}
+                titre="Sous-marge"
+                valeur={rentabilite.nombre_sous_marge}
                 icone={<TrendingDownIcon sx={{ fontSize: 20 }} />}
                 couleur="error.main"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               <CarteChiffre
-                titre="À l'équilibre"
-                valeur={rentabilite.nombre_a_l_equilibre}
+                titre="Dans la norme"
+                valeur={rentabilite.nombre_dans_la_norme}
                 icone={<BalanceIcon sx={{ fontSize: 20 }} />}
-                couleur="text.secondary"
+                couleur="success.main"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <CarteChiffre
+                titre="Sur-marge"
+                valeur={rentabilite.nombre_sur_marge}
+                icone={<TrendingUpIcon sx={{ fontSize: 20 }} />}
+                couleur="warning.main"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>

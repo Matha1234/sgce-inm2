@@ -21,7 +21,8 @@ class ControlePrixRevientListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = ControlePrixRevient.objects.select_related(
-            "dossier", "dossier__atelier", "dossier__commande", "dossier__commande__devis"
+            "dossier", "dossier__atelier", "dossier__commande",
+            "dossier__commande__devis", "composant", "ligne_devis",
         ).all()
         dossier_id = self.request.query_params.get("dossier")
         if dossier_id:
@@ -41,7 +42,8 @@ class ControlePrixRevientDetailView(generics.RetrieveAPIView):
     """Consultation d'une fiche de contrôle du prix de revient. Non modifiable après création."""
 
     queryset = ControlePrixRevient.objects.select_related(
-        "dossier", "dossier__atelier", "dossier__commande", "dossier__commande__devis"
+        "dossier", "dossier__atelier", "dossier__commande",
+        "dossier__commande__devis", "composant", "ligne_devis",
     ).all()
     serializer_class = ControlePrixRevientSerializer
     permission_classes = [IsAuthenticated]
@@ -62,14 +64,14 @@ class TableauBordRentabiliteView(APIView):
 
         donnees = {
             "nombre_controles": queryset.count(),
-            "nombre_beneficiaires": queryset.filter(
-                resultat=ControlePrixRevient.Resultat.BENEFICIAIRE
+            "nombre_sous_marge": queryset.filter(
+                resultat=ControlePrixRevient.Resultat.SOUS_MARGE
             ).count(),
-            "nombre_deficitaires": queryset.filter(
-                resultat=ControlePrixRevient.Resultat.DEFICITAIRE
+            "nombre_dans_la_norme": queryset.filter(
+                resultat=ControlePrixRevient.Resultat.DANS_LA_NORME
             ).count(),
-            "nombre_a_l_equilibre": queryset.filter(
-                resultat=ControlePrixRevient.Resultat.EQUILIBRE
+            "nombre_sur_marge": queryset.filter(
+                resultat=ControlePrixRevient.Resultat.SUR_MARGE
             ).count(),
             "nombre_ecarts_significatifs": queryset.filter(ecart_significatif=True).count(),
             "marge_moyenne_pourcentage": agregats["marge_moyenne"] or 0,

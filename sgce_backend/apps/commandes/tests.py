@@ -3,7 +3,14 @@ from decimal import Decimal
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from apps.catalogue.models import Composant, FamilleProduit, LigneMatierePremiere, LigneOperation, Machine, Produit
+from apps.catalogue.models import (
+    Composant,
+    FamilleProduit,
+    LigneMatierePremiere,
+    LigneOperation,
+    PosteDeCharge,
+    Produit,
+)
 from apps.utilisateurs.models import Utilisateur
 
 from .models import Article, Atelier, Commande, OrganismeClient
@@ -30,9 +37,9 @@ class DevisInstancieCatalogueApiTests(TestCase):
         LigneMatierePremiere.objects.create(
             composant=composant, article=article, quantite_unitaire=Decimal("1.000")
         )
-        machine = Machine.objects.create(nom="Presse test", cout_horaire=Decimal("60.00"))
+        machine = PosteDeCharge.objects.create(nom="Presse test", cout_horaire=Decimal("60.00"))
         LigneOperation.objects.create(
-            composant=composant, machine=machine, libelle="Impression", temps_unitaire=Decimal("1.00")
+            composant=composant, poste=machine, libelle="Impression", temps_unitaire=Decimal("1.00")
         )
         # Par exemplaire : matière = 1*5 = 5 ; opération = (1/60)*60 = 1 -> total 6/exemplaire
 
@@ -55,6 +62,64 @@ class DevisInstancieCatalogueApiTests(TestCase):
         self.assertEqual(reponse.status_code, 201, reponse.data)
         # 50 exemplaires * 6.00 / exemplaire = 300.00
         self.assertEqual(reponse.data["prix_revient"], "300.00")
+
+    def test_creation_devis_catalogue_genere_lignes_devis(self):
+        """RG27 + RG28 : une LigneDevis prévisionnelle est générée par composant."""
+        reponse = self.client.post(
+            "/api/devis/",
+            {
+                "commande": self.commande.id,
+                "produit_catalogue": self.produit.id,
+                "prix_vente": "500.00",
+                "duree_production": 2,
+            },
+            format="json",
+        )
+        self.assertEqual(reponse.status_code, 201, reponse.data)
+        lignes = reponse.data["lignes_devis"]
+        self.assertEqual(len(lignes), 1)
+        # 50 exemplaires : matière 1*5*50 = 250 ; opération (1/60)*60*50 = 50
+        self.assertEqual(lignes[0]["cout_matiere_estime"], "250.00")
+        self.assertEqual(lignes[0]["cout_operation_estime"], "50.00")
+        self.assertEqual(lignes[0]["cout_total_estime"], "300.00")
+
+    def test_creation_devis_catalogue_avec_remarque_rg30(self):
+        """RG30 : la remarque portée par la LigneDevis prévaut sur le catalogue."""
+        composant = Composant.objects.get(produit=self.produit)
+        reponse = self.client.post(
+            "/api/devis/",
+            {
+                "commande": self.commande.id,
+                "produit_catalogue": self.produit.id,
+                "prix_vente": "500.00",
+                "duree_production": 2,
+                "remarques_lignes": [
+                    {"composant": composant.id, "remarque": "Papier recyclé à la demande du client"},
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(reponse.status_code, 201, reponse.data)
+        self.assertEqual(
+            reponse.data["lignes_devis"][0]["remarque"],
+            "Papier recyclé à la demande du client",
+        )
+
+    def test_creation_devis_catalogue_refuse_prix_revient_saisi(self):
+        """RG27 : le prix de revient d'un devis catalogue est calculé, jamais saisi."""
+        reponse = self.client.post(
+            "/api/devis/",
+            {
+                "commande": self.commande.id,
+                "produit_catalogue": self.produit.id,
+                "prix_revient": "999.00",
+                "prix_vente": "500.00",
+                "duree_production": 2,
+            },
+            format="json",
+        )
+        self.assertEqual(reponse.status_code, 400)
+        self.assertIn("prix_revient", reponse.data)
 
     def test_creation_devis_hors_catalogue_sans_prix_revient_est_refusee(self):
         reponse = self.client.post(

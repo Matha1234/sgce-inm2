@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
-from apps.commandes.models import Article, Commande, DossierFabrication, EtapeProduction, MouvementStock
+from apps.commandes.models import Article, Commande, DossierFabrication, EtapeProduction, ExecutionOperation, MouvementStock
 from apps.controle.models import ControlePrixRevient
 from apps.utilisateurs.models import Utilisateur
 
@@ -154,16 +154,26 @@ def _notifier_controle_prix_revient(sender, instance, created, **kwargs):
         destinataires.append(dossier.commande.cree_par)
 
     if instance.ecart_significatif:
+        cible = (
+            f" composant « {instance.composant.designation} » du dossier {dossier.numero_dossier}"
+            if instance.composant_id
+            else f" dossier {dossier.numero_dossier}"
+        )
         message = (
-            f"Écart significatif détecté sur le dossier {dossier.numero_dossier} : "
+            f"Écart significatif détecté sur le{cible} : "
             f"résultat {instance.get_resultat_display().lower()} "
             f"(marge réelle {instance.marge_reelle_pourcentage}% vs cible "
             f"{instance.marge_cible_pourcentage}%)."
         )
     else:
+        cible = (
+            f" composant « {instance.composant.designation} » du dossier {dossier.numero_dossier}"
+            if instance.composant_id
+            else f" dossier {dossier.numero_dossier}"
+        )
         message = (
-            f"Contrôle du prix de revient établi pour le dossier "
-            f"{dossier.numero_dossier} : {instance.get_resultat_display().lower()} "
+            f"Contrôle du prix de revient établi pour le{cible} : "
+            f"{instance.get_resultat_display().lower()} "
             f"(marge réelle {instance.marge_reelle_pourcentage}%)."
         )
     _notifier(destinataires, Notification.Categorie.CONTROLE, message, instance.pk)
@@ -208,7 +218,7 @@ def _notifier_mouvement_stock(sender, instance, created, **kwargs):
         except Article.DoesNotExist:
             return
 
-        if type_mouvement == MouvementStock.TypeMouvement.SORTIE and dossier_id:
+        if type_mouvement in (MouvementStock.TypeMouvement.SORTIE, MouvementStock.TypeMouvement.RESERVATION) and dossier_id:
             try:
                 dossier = DossierFabrication.objects.select_related("atelier", "commande").get(
                     pk=dossier_id
@@ -228,7 +238,7 @@ def _notifier_mouvement_stock(sender, instance, created, **kwargs):
         # Quantite avant ce mouvement, deduite du delta applique en base.
         quantite_avant = (
             article.quantite_stock + quantite
-            if type_mouvement == MouvementStock.TypeMouvement.SORTIE
+            if type_mouvement in (MouvementStock.TypeMouvement.SORTIE, MouvementStock.TypeMouvement.RESERVATION)
             else article.quantite_stock - quantite
         )
         etait_en_alerte = quantite_avant <= article.seuil_securite
@@ -246,3 +256,36 @@ def _notifier_mouvement_stock(sender, instance, created, **kwargs):
             )
 
     transaction.on_commit(_apres_commit)
+
+
+# ---------------------------------------------------------------------
+# ExecutionOperation (RG18 + RG35)
+# ---------------------------------------------------------------------
+@receiver(pre_save, sender=ExecutionOperation)
+def _memoriser_statut_execution(sender, instance, **kwargs):
+    instance._statut_avant = None
+    if instance.pk:
+        instance._statut_avant = (
+            ExecutionOperation.objects.filter(pk=instance.pk)
+            .values_list("statut", flat=True)
+            .first()
+        )
+
+
+@receiver(post_save, sender=ExecutionOperation)
+def _notifier_changement_statut_execution(sender, instance, created, **kwargs):
+    if created or getattr(instance, "_statut_avant", None) == instance.statut:
+        return
+
+    dossier = instance.dossier
+    destinataires = list(_admins())
+    if dossier.commande.cree_par_id:
+        destinataires.append(dossier.commande.cree_par)
+    if dossier.atelier.chef_atelier_id:
+        destinataires.append(dossier.atelier.chef_atelier)
+
+    message = (
+        f"Exécution op. #{instance.id} du dossier {dossier.numero_dossier} : "
+        f"statut passé à « {instance.get_statut_display()} »."
+    )
+    _notifier(destinataires, Notification.Categorie.ETAPE, message, instance.pk)

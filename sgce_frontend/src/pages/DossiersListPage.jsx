@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Chip, CircularProgress, IconButton, Paper,
+  Alert, Box, Chip, CircularProgress, IconButton, MenuItem, Paper,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, Tooltip, Typography,
+  TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
@@ -17,12 +17,22 @@ import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable
 import PaginationBar from "../components/common/PaginationBar";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
+import BoutonExport from "../components/common/BoutonExport";
 
 const COULEURS_STATUT_PRODUCTION = {
   CREE: "default",
   EN_COURS: "warning",
   TERMINE: "success",
 };
+
+// Options du filtre de statut — liste déroulante professionnelle
+const OPTIONS_STATUT = [
+  { code: "", libelle: "Tous" },
+  { code: "CREE", libelle: "Créé" },
+  { code: "EN_COURS", libelle: "En cours" },
+  { code: "TERMINE", libelle: "Terminé" },
+];
+const LIBELLE_STATUT = Object.fromEntries(OPTIONS_STATUT.map((o) => [o.code, o.libelle]));
 
 function normaliser(donnees) {
   return Array.isArray(donnees) ? donnees : donnees.results || [];
@@ -57,6 +67,14 @@ export default function DossiersListPage() {
     });
   }, [dossiers, recherche, filtreStatut]);
 
+  // Compteurs par statut pour le filtre déroulant (ex. « En cours (3) »)
+  const comptesStatut = useMemo(() => {
+    const c = { "": dossiers.length };
+    OPTIONS_STATUT.forEach((o) => { if (o.code) c[o.code] = 0; });
+    dossiers.forEach((d) => { if (c[d.statut_production] !== undefined) c[d.statut_production] += 1; });
+    return c;
+  }, [dossiers]);
+
   // Tri par colonne puis page courante tronquée à « surPage » lignes
   const { cleTri, directionTri, gererTri, donneesTriees } = useTriTableau(dossiersFiltres);
   const dossiersPaginees = useMemo(
@@ -88,7 +106,7 @@ export default function DossiersListPage() {
 
       {erreur && <Alert severity="error" sx={{ mb: 2 }}>{erreur}</Alert>}
 
-      {/* Filtres + recherche — boutons de statut et barre sur la même ligne */}
+      {/* Filtres + recherche — liste déroulante de statut et barre sur la même ligne */}
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={1.5}
@@ -102,19 +120,72 @@ export default function DossiersListPage() {
           largeur={400}
           sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }}
         />
-        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-          {["", "CREE", "EN_COURS", "TERMINE"].map((statut) => (
-            <Chip
-              key={statut}
-              label={statut === "" ? "Tous" : LIBELLES_STATUT_PRODUCTION[statut]}
-              size="small"
-              color={filtreStatut === statut ? "primary" : "default"}
-              variant={filtreStatut === statut ? "filled" : "outlined"}
-              onClick={() => { setFiltreStatut(statut); setPage(0); }}
-              sx={{ fontWeight: 600 }}
-            />
+        <TextField
+          select
+          size="small"
+          label="Statut"
+          value={filtreStatut}
+          onChange={(e) => { setFiltreStatut(e.target.value); setPage(0); }}
+          sx={{ minWidth: 200, flexShrink: 0, "& .MuiInputBase-root": { fontSize: 13 } }}
+          slotProps={{
+            select: {
+              renderValue: (v) => (
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {LIBELLE_STATUT[v] || "Tous"}
+                </Typography>
+              ),
+            },
+          }}
+        >
+          {OPTIONS_STATUT.map((o) => (
+            <MenuItem key={o.code} value={o.code} sx={{ fontSize: 13 }}>
+              <Typography variant="body2" sx={{ flexGrow: 1 }}>{o.libelle}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 3 }}>
+                {comptesStatut[o.code] ?? 0}
+              </Typography>
+            </MenuItem>
           ))}
-        </Stack>
+        </TextField>
+        <BoutonExport
+          surPdf={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterPDF({
+              fichier: `Dossiers_${Date.now()}.pdf`,
+              titre: "Liste des dossiers de fabrication",
+              sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : filtreStatut ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}` : "",
+              meta: e.metaEdition(dossiersFiltres.length),
+              colonnes: [
+                e.colonne("N\u00b0 Dossier", "numero_dossier"),
+                e.colonne("Commande", "commande_numero"),
+                e.colonne("Atelier", "atelier_nom", "left"),
+                e.colonnePerso("Statut", (d) => LIBELLES_STATUT_PRODUCTION[d.statut_production] || d.statut_production),
+                e.colonnePerso("Cr\u00e9\u00e9 le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
+              ],
+              lignes: dossiersFiltres,
+            });
+          }}
+          surExcel={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterExcel({
+              fichier: `Dossiers_${Date.now()}.xlsx`,
+              feuilles: [{
+                nom: "Dossiers", titre: "Liste des dossiers de fabrication",
+                sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : filtreStatut ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}` : "",
+                meta: e.metaEdition(dossiersFiltres.length),
+                colonnes: [
+                  e.colonne("N\u00b0 Dossier", "numero_dossier"),
+                  e.colonne("Commande", "commande_numero"),
+                  e.colonne("Atelier", "atelier_nom", "left"),
+                  e.colonnePerso("Statut", (d) => LIBELLES_STATUT_PRODUCTION[d.statut_production] || d.statut_production),
+                  e.colonnePerso("Cr\u00e9\u00e9 le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
+                ],
+                lignes: dossiersFiltres,
+              }],
+            });
+          }}
+          libelle="Exporter"
+          taille="small"
+        />
       </Stack>
 
       {chargement ? (

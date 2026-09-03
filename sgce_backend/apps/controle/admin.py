@@ -6,7 +6,7 @@ from .models import ControlePrixRevient
 @admin.register(ControlePrixRevient)
 class ControlePrixRevientAdmin(admin.ModelAdmin):
     list_display = (
-        "dossier", "resultat", "marge_reelle_pourcentage",
+        "dossier", "composant", "ligne_devis", "resultat", "marge_reelle_pourcentage",
         "marge_cible_pourcentage", "ecart_significatif", "date_controle",
     )
     list_filter = ("resultat", "ecart_significatif")

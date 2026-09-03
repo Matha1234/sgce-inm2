@@ -21,6 +21,7 @@ import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable
 import PaginationBar from "../components/common/PaginationBar";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
+import BoutonExport from "../components/common/BoutonExport";
 
 const LIBELLES_TYPE = { PROFORMA: "Proforma", DEFINITIVE: "Définitive" };
 const COULEURS_TYPE = { PROFORMA: "info", DEFINITIVE: "success" };
@@ -179,6 +180,48 @@ export default function FacturesListPage() {
           placeholder="Rechercher par numéro de facture, dossier ou commande…"
           largeur={400}
           sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }}
+        />
+        <BoutonExport
+          surPdf={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterPDF({
+              fichier: `Factures_${Date.now()}.pdf`,
+              titre: "Liste des factures",
+              sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : "",
+              meta: e.metaEdition(facturesFiltres.length),
+              colonnes: [
+                e.colonne("N\u00b0 Facture", "numero_facture"),
+                e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
+                e.colonne("Dossier", "dossier_numero"),
+                e.colonne("Commande", "commande_numero"),
+                e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
+                e.colonnePerso("Date d'\u00e9mission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
+              ],
+              lignes: facturesFiltres,
+            });
+          }}
+          surExcel={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterExcel({
+              fichier: `Factures_${Date.now()}.xlsx`,
+              feuilles: [{
+                nom: "Factures", titre: "Liste des factures",
+                sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : "",
+                meta: e.metaEdition(facturesFiltres.length),
+                colonnes: [
+                  e.colonne("N\u00b0 Facture", "numero_facture"),
+                  e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
+                  e.colonne("Dossier", "dossier_numero"),
+                  e.colonne("Commande", "commande_numero"),
+                  e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
+                  e.colonnePerso("Date d'\u00e9mission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
+                ],
+                lignes: facturesFiltres,
+              }],
+            });
+          }}
+          libelle="Exporter"
+          taille="small"
         />
         {peutEmettre && (
           <Button

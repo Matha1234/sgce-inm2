@@ -8,13 +8,20 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 
 from apps.utilisateurs.permissions import IsAdmin
 
-from .models import Composant, FamilleProduit, LigneMatierePremiere, LigneOperation, Machine, Produit
+from .models import (
+    Composant,
+    FamilleProduit,
+    LigneMatierePremiere,
+    LigneOperation,
+    PosteDeCharge,
+    Produit,
+)
 from .serializers import (
     ComposantSerializer,
     FamilleProduitSerializer,
     LigneMatierePremiereSerializer,
     LigneOperationSerializer,
-    MachineSerializer,
+    PosteDeChargeSerializer,
     ProduitEstimationInputSerializer,
     ProduitSerializer,
 )
@@ -46,14 +53,14 @@ class FamilleProduitDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestr
 
 class ProduitListCreateView(LectureOuAdminMixin, generics.ListCreateAPIView):
     queryset = Produit.objects.select_related("famille").prefetch_related(
-        "composants__lignes_matiere_premiere__article", "composants__lignes_operation__machine"
+        "composants__lignes_matiere_premiere__article", "composants__lignes_operation__poste"
     )
     serializer_class = ProduitSerializer
 
 
 class ProduitDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Produit.objects.select_related("famille").prefetch_related(
-        "composants__lignes_matiere_premiere__article", "composants__lignes_operation__machine"
+        "composants__lignes_matiere_premiere__article", "composants__lignes_operation__poste"
     )
     serializer_class = ProduitSerializer
 
@@ -68,14 +75,14 @@ class ComposantDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestroyAPI
     serializer_class = ComposantSerializer
 
 
-class MachineListCreateView(LectureOuAdminMixin, generics.ListCreateAPIView):
-    queryset = Machine.objects.all()
-    serializer_class = MachineSerializer
+class PosteDeChargeListCreateView(LectureOuAdminMixin, generics.ListCreateAPIView):
+    queryset = PosteDeCharge.objects.all()
+    serializer_class = PosteDeChargeSerializer
 
 
-class MachineDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestroyAPIView):
-    queryset = Machine.objects.all()
-    serializer_class = MachineSerializer
+class PosteDeChargeDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestroyAPIView):
+    queryset = PosteDeCharge.objects.all()
+    serializer_class = PosteDeChargeSerializer
 
 
 class LigneMatierePremiereListCreateView(LectureOuAdminMixin, generics.ListCreateAPIView):
@@ -89,12 +96,12 @@ class LigneMatierePremiereDetailView(LectureOuAdminMixin, generics.RetrieveUpdat
 
 
 class LigneOperationListCreateView(LectureOuAdminMixin, generics.ListCreateAPIView):
-    queryset = LigneOperation.objects.select_related("composant", "machine")
+    queryset = LigneOperation.objects.select_related("composant", "poste")
     serializer_class = LigneOperationSerializer
 
 
 class LigneOperationDetailView(LectureOuAdminMixin, generics.RetrieveUpdateDestroyAPIView):
-    queryset = LigneOperation.objects.select_related("composant", "machine")
+    queryset = LigneOperation.objects.select_related("composant", "poste")
     serializer_class = LigneOperationSerializer
 
 

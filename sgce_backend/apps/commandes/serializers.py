@@ -7,7 +7,12 @@ from .models import (
     Devis,
     DossierFabrication,
     EtapeProduction,
+    ExecutionOperation,
+    LigneDevis,
+    LigneMatiereDevis,
+    LigneOperationDevis,
     MouvementStock,
+    OptionDevis,
     OrganismeClient,
 )
 
@@ -15,7 +20,8 @@ from .models import (
 class OrganismeClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrganismeClient
-        fields = ["id", "nom", "type", "adresse"]
+        fields = ["id", "nom", "type", "adresse", "nif_stat", "telephone", "email", "contact_principal", "date_creation"]
+        read_only_fields = ["date_creation"]
 
 
 class EstimationIAResumeSerializer(serializers.Serializer):
@@ -24,10 +30,102 @@ class EstimationIAResumeSerializer(serializers.Serializer):
     prix_predit = serializers.DecimalField(max_digits=12, decimal_places=2)
     duree_predite = serializers.IntegerField()
     version_modele = serializers.CharField()
+    methode = serializers.CharField()
+    score_confiance = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+
+
+class OptionDevisSerializer(serializers.ModelSerializer):
+    surcout_total = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = OptionDevis
+        fields = [
+            "id", "devis", "libelle", "description",
+            "surcout_matiere", "surcout_operation", "surcout_total", "date_ajout",
+        ]
+        read_only_fields = ["date_ajout"]
+
+
+class LigneMatiereDevisSerializer(serializers.ModelSerializer):
+    article_designation = serializers.CharField(source="article.designation", read_only=True)
+
+    class Meta:
+        model = LigneMatiereDevis
+        fields = [
+            "id", "ligne_devis", "article", "article_designation",
+            "quantite_estimee", "unite", "cout_estime",
+        ]
+
+
+class LigneOperationDevisSerializer(serializers.ModelSerializer):
+    poste_nom = serializers.CharField(source="poste.nom", read_only=True)
+
+    class Meta:
+        model = LigneOperationDevis
+        fields = [
+            "id", "ligne_devis", "poste", "poste_nom",
+            "ordre_execution", "temps_estime", "cout_estime",
+        ]
+
+
+class ExecutionOperationSerializer(serializers.ModelSerializer):
+    poste_nom = serializers.CharField(source="poste.nom", read_only=True)
+    utilisateur_nom = serializers.CharField(source="utilisateur.get_full_name", read_only=True, default=None)
+    dossier_numero = serializers.CharField(source="dossier.numero_dossier", read_only=True)
+
+    class Meta:
+        model = ExecutionOperation
+        fields = [
+            "id", "dossier", "dossier_numero", "ligne_operation_devis",
+            "poste", "poste_nom", "utilisateur", "utilisateur_nom",
+            "temps_reel", "statut", "date_saisie",
+        ]
+        read_only_fields = ["date_saisie"]
+
+
+class LigneDevisResumeSerializer(serializers.ModelSerializer):
+    """
+    Résumé d'une ligne de devis (RG27, RG28) : chiffrage prévisionnel par
+    composant, exposé en lecture seule une fois le devis créé. Les coûts
+    sont toujours calculés par le moteur de calcul du catalogue (RG27,
+    RG29) — jamais saisis manuellement.
+    """
+
+    composant_designation = serializers.CharField(source="composant.designation", read_only=True)
+    composant_ordre = serializers.IntegerField(source="composant.ordre", read_only=True)
+    cout_total_estime = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = LigneDevis
+        fields = [
+            "id", "composant", "composant_ordre", "composant_designation",
+            "cout_matiere_estime", "cout_operation_estime", "cout_total_estime",
+            "part_fixe_amortie", "part_variable", "remarque",
+        ]
+
+
+class LigneDevisRemarqueSerializer(serializers.Serializer):
+    """
+    Écriture des remarques techniques à la création du devis (RG30) :
+    l'Agent SDO peut préciser, composant par composant, une observation
+    qui prévaudra sur le comportement théorique du catalogue lors de la
+    génération du dossier de fabrication.
+    """
+
+    composant = serializers.IntegerField()
+    remarque = serializers.CharField(max_length=255, allow_blank=True, required=False, default="")
 
 
 class DevisSerializer(serializers.ModelSerializer):
     estimation_ia = serializers.SerializerMethodField()
+    lignes_devis = LigneDevisResumeSerializer(many=True, read_only=True)
+    remarques_lignes = LigneDevisRemarqueSerializer(
+        many=True, required=False, write_only=True,
+        help_text="Remarques techniques par composant (RG30), uniquement à la création.",
+    )
+    options = OptionDevisSerializer(many=True, read_only=True)
+    lignes_matiere_detail = serializers.SerializerMethodField()
+    lignes_operation_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
@@ -36,8 +134,10 @@ class DevisSerializer(serializers.ModelSerializer):
             "prix_revient", "prix_vente", "duree_production",
             "date_devis", "valide", "valide_par", "estimation_ia",
             "pluriannuel", "duree_contrat_annees", "taux_inflation_projete",
+            "lignes_devis", "remarques_lignes",
+            "options", "lignes_matiere_detail", "lignes_operation_detail",
         ]
-        read_only_fields = ["date_devis", "valide_par", "estimation_ia"]
+        read_only_fields = ["date_devis", "valide_par", "estimation_ia", "lignes_devis"]
         extra_kwargs = {"prix_revient": {"required": False}}
 
     def get_estimation_ia(self, obj):
@@ -45,6 +145,28 @@ class DevisSerializer(serializers.ModelSerializer):
         if estimation is None:
             return None
         return EstimationIAResumeSerializer(estimation).data
+
+    def get_lignes_matiere_detail(self, obj):
+        """Expose le detail matiere de toutes les LigneDevis du devis (RG39)."""
+        lignes = LigneMatiereDevis.objects.filter(
+            ligne_devis__devis=obj
+        ).select_related("article")
+        return LigneMatiereDevisSerializer(lignes, many=True).data
+
+    def get_lignes_operation_detail(self, obj):
+        """Expose le detail operation de toutes les LigneDevis du devis (RG39)."""
+        lignes = LigneOperationDevis.objects.filter(
+            ligne_devis__devis=obj
+        ).select_related("poste")
+        return LigneOperationDevisSerializer(lignes, many=True).data
+
+    def validate_remarques_lignes(self, valeur):
+        """RG30 : les remarques ne sont acceptées qu'à la création d'un devis catalogue."""
+        if self.instance is not None:
+            raise serializers.ValidationError(
+                "Les remarques de lignes ne peuvent être définies qu'à la création du devis (RG30)."
+            )
+        return valeur
 
     def validate(self, attrs):
         """
@@ -65,6 +187,15 @@ class DevisSerializer(serializers.ModelSerializer):
                     "prix_revient": (
                         "Obligatoire pour un devis hors catalogue "
                         "(aucun produit_catalogue renseigné) - RG27."
+                    )
+                }
+            )
+        if produit_catalogue and prix_revient is not None and self.instance is None:
+            raise serializers.ValidationError(
+                {
+                    "prix_revient": (
+                        "Le prix de revient est calculé automatiquement depuis le catalogue "
+                        "— ne pas le fournir (RG27)."
                     )
                 }
             )
@@ -91,6 +222,15 @@ class DevisSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def create(self, validated_data):
+        # Champ write_only porté par le devis, traité par la vue (RG30).
+        validated_data.pop("remarques_lignes", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("remarques_lignes", None)
+        return super().update(instance, validated_data)
+
 
 class CommandeSerializer(serializers.ModelSerializer):
     organisme_nom = serializers.CharField(source="organisme.nom", read_only=True)
@@ -101,6 +241,7 @@ class CommandeSerializer(serializers.ModelSerializer):
         model = Commande
         fields = [
             "id", "numero", "date_commande", "statut", "delai_contractuel",
+            "date_livraison_souhaitee",
             "nature", "type_document", "quantite", "atelier", "est_fictif",
             "organisme", "organisme_nom", "cree_par", "devis", "a_un_dossier",
         ]
@@ -156,13 +297,15 @@ class AtelierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Atelier
-        fields = ["id", "nom", "chef_atelier", "chef_atelier_nom"]
+        fields = ["id", "nom", "chef_atelier", "chef_atelier_nom", "capacite"]
 
 
 class EtapeProductionSerializer(serializers.ModelSerializer):
+    poste_nom = serializers.CharField(source="poste.nom", read_only=True, default=None)
+
     class Meta:
         model = EtapeProduction
-        fields = ["id", "dossier", "libelle", "statut", "date_debut", "date_fin"]
+        fields = ["id", "dossier", "ordre", "libelle", "poste", "poste_nom", "statut", "date_debut", "date_fin"]
 
 
 class DossierFabricationSerializer(serializers.ModelSerializer):
@@ -174,7 +317,7 @@ class DossierFabricationSerializer(serializers.ModelSerializer):
         model = DossierFabrication
         fields = [
             "id", "commande", "commande_numero", "numero_dossier",
-            "atelier", "atelier_nom", "statut_production", "date_creation", "etapes",
+            "atelier", "atelier_nom", "statut_production", "date_creation", "date_cloture", "etapes",
         ]
         read_only_fields = ["numero_dossier", "date_creation"]
         extra_kwargs = {"atelier": {"required": False}}
@@ -255,7 +398,7 @@ class ArticleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Article
         fields = [
-            "id", "designation", "classe_comptable", "type_papier", "type_encre",
+            "id", "designation", "emplacement_stock", "classe_comptable", "type_papier", "type_encre",
             "type_film", "unite", "cout_unitaire", "quantite_stock", "seuil_securite", "est_en_alerte",
         ]
         # La quantite en stock ne doit jamais etre modifiee directement :
@@ -272,7 +415,7 @@ class MouvementStockSerializer(serializers.ModelSerializer):
         model = MouvementStock
         fields = [
             "id", "article", "article_designation", "dossier", "dossier_numero",
-            "type_mouvement", "quantite", "date_mouvement", "valide_par",
+            "type_mouvement", "quantite", "commentaire", "date_mouvement", "valide_par",
         ]
         read_only_fields = ["date_mouvement", "valide_par"]
 

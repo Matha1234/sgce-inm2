@@ -52,7 +52,18 @@ class OrganismeClient(models.Model):
 
     nom = models.CharField(max_length=100)
     type = models.CharField(max_length=30, choices=TypeOrganisme.choices)
+    nif_stat = models.CharField(
+        max_length=30, blank=True,
+        help_text="Numéro d'identification fiscale / statistique.",
+    )
     adresse = models.CharField(max_length=255, blank=True)
+    telephone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    contact_principal = models.CharField(
+        max_length=100, blank=True,
+        help_text="Nom du contact principal chez l'organisme.",
+    )
+    date_creation = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "organismes_clients"
@@ -99,6 +110,10 @@ class Commande(models.Model):
     delai_contractuel = models.DateField(
         null=True, blank=True,
         help_text="Obligatoire pour les commandes étatiques soumises à marché public (RG19).",
+    )
+    date_livraison_souhaitee = models.DateField(
+        null=True, blank=True,
+        help_text="Date de livraison souhaitée par le client.",
     )
 
     nature = models.CharField(
@@ -227,6 +242,237 @@ class Devis(models.Model):
                     "Le taux d'inflation projeté est obligatoire pour valider un devis pluriannuel (RG22)."
                 )
 
+    def generer_lignes_devis(self, remarques_par_composant=None):
+        """
+        RG27 + RG28 (mise à jour STI) : génère les LigneDevis du devis à
+        partir de la nomenclature du produit du catalogue instancié — une
+        ligne par composant, chiffrée par le moteur de calcul (RG27, RG29).
+
+        Chaque ligne porte le prévisionnel granulaire (coûts matières et
+        opérations estimés, parts fixe et variable) qui servira de support
+        de comparaison au contrôle du prix de revient à la clôture (RG28).
+
+        RG30 : une remarque technique fournie par l'Agent SDO (option
+        mineure spécifique au devis) prévaut sur le comportement théorique
+        du catalogue lors de la génération du dossier de fabrication.
+
+        Ne fait rien si le devis n'est pas rattaché à un produit du
+        catalogue (prévisionnel saisi manuellement, non granulaire).
+        Les lignes existantes sont remplacées (recréation du chiffrage).
+        """
+        if not self.produit_catalogue_id:
+            return []
+
+        resultat = self.produit_catalogue.calculer_prix_revient(self.commande.quantite)
+        remarques = remarques_par_composant or {}
+
+        LigneDevis.objects.filter(devis=self).delete()
+        lignes = []
+        for detail in resultat["detail_composants"]:
+            composant_id = detail["composant_id"]
+            lignes.append(
+                LigneDevis(
+                    devis=self,
+                    composant_id=composant_id,
+                    cout_matiere_estime=detail["cout_matiere_estime"],
+                    cout_operation_estime=detail["cout_operation_estime"],
+                    part_fixe_amortie=detail["part_fixe_amortie"],
+                    part_variable=detail["part_variable"],
+                    remarque=remarques.get(composant_id, ""),
+                )
+            )
+        LigneDevis.objects.bulk_create(lignes)
+        return lignes
+
+
+class OptionDevis(models.Model):
+    """
+    Option ou specification technique sur-mesure d'un devis (RG33, mise a
+    jour STI n°2). En complement du produit catalogue de base, l'Agent SDO
+    peut ajouter une ou plusieurs personnalisations (ex. couleur de papier
+    differente, pelliculage, encart special), chacune pouvant ajouter un
+    surcout matiere et/ou operation au prix de revient.
+
+    RG38 (principe anti-duplication) : le devis reference le produit
+    catalogue par cle etrangere sans en dupliquer les attributs ; les
+    personnalisations propres a la commande transitent uniquement par
+    OptionDevis.
+    """
+
+    devis = models.ForeignKey(
+        Devis, on_delete=models.CASCADE, related_name="options"
+    )
+    libelle = models.CharField(
+        max_length=100,
+        help_text="Ex. « Pelliculage mat », « Papier couleur couverture ».",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Description detaillee de l'option.",
+    )
+    surcout_matiere = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Surcoût matière de cette option, le cas échéant (RG33).",
+    )
+    surcout_operation = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Surcoût opération de cette option, le cas échéant (RG33).",
+    )
+    date_ajout = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "options_devis"
+        verbose_name = "Option de devis"
+        verbose_name_plural = "Options de devis"
+
+    def __str__(self):
+        return f"{self.libelle} (devis #{self.devis_id})"
+
+    @property
+    def surcout_total(self):
+        """Surcoût total de l'option (matiere + operation)."""
+        total = 0
+        if self.surcout_matiere:
+            total += self.surcout_matiere
+        if self.surcout_operation:
+            total += self.surcout_operation
+        return total
+
+
+class LigneDevis(models.Model):
+    """
+    Ligne de devis (RÉTABLIE — mise à jour STI, section 5.7) : chiffrage
+    prévisionnel par composant d'un devis instancié depuis le catalogue
+    (RG27).
+
+    RG28 : chaque ligne sert de support prévisionnel granulaire à la
+    comparaison du contrôle du prix de revient à la clôture, composant par
+    composant, face aux consommations réelles constatées en fabrication.
+
+    RG30 : la remarque technique portée par la ligne prévaut sur le
+    comportement théorique du catalogue en cas de divergence avec la
+    demande spécifique du client (génération du dossier de fabrication).
+    """
+
+    devis = models.ForeignKey(Devis, on_delete=models.CASCADE, related_name="lignes_devis")
+    composant = models.ForeignKey(
+        "catalogue.Composant", on_delete=models.PROTECT, related_name="lignes_devis"
+    )
+    cout_matiere_estime = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Coût prévisionnel des matières premières du composant (RG27).",
+    )
+    cout_operation_estime = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Coût prévisionnel des opérations du composant (RG27).",
+    )
+    part_fixe_amortie = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Part des charges fixes amortie sur la quantité totale commandée (RG29).",
+    )
+    part_variable = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Part des charges variables, proportionnelle à la quantité (RG29).",
+    )
+    remarque = models.CharField(
+        max_length=255, blank=True,
+        help_text="Remarque technique prévalant sur le catalogue en cas de divergence (RG30).",
+    )
+
+    class Meta:
+        db_table = "lignes_devis"
+        verbose_name = "Ligne de devis"
+        verbose_name_plural = "Lignes de devis"
+        ordering = ["devis_id", "composant__ordre"]
+        unique_together = [("devis", "composant")]
+
+    def __str__(self):
+        return f"Devis #{self.devis_id} — {self.composant} ({self.cout_total_estime} Ar)"
+
+    @property
+    def cout_total_estime(self):
+        return (self.cout_matiere_estime or 0) + (self.cout_operation_estime or 0)
+
+
+class LigneMatiereDevis(models.Model):
+    """
+    Detail matiere premiere d'une ligne de devis (RG39, mise a jour STI
+    n°4). Initialise par copie depuis LigneMatierePremiere du composant
+    catalogue au moment de la creation du devis, et ajustable ensuite via
+    les options du devis (OptionDevis).
+
+    cout_matiere_estime de LigneDevis est la somme calculee des
+    cout_estime de ses LigneMatiereDevis.
+    """
+
+    ligne_devis = models.ForeignKey(
+        LigneDevis, on_delete=models.CASCADE, related_name="lignes_matiere"
+    )
+    article = models.ForeignKey(
+        "commandes.Article", on_delete=models.PROTECT, related_name="lignes_devis"
+    )
+    quantite_estimee = models.DecimalField(
+        max_digits=10, decimal_places=3,
+        help_text="Quantité estimée de matière pour ce devis.",
+    )
+    unite = models.CharField(max_length=20, blank=True)
+    cout_estime = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Coût estimé de cette ligne matière (calculé depuis le catalogue).",
+    )
+
+    class Meta:
+        db_table = "lignes_matiere_devis"
+        verbose_name = "Ligne matière du devis"
+        verbose_name_plural = "Lignes matière du devis"
+
+    def __str__(self):
+        return f"LigneDevis #{self.ligne_devis_id} — {self.article.designation} ({self.quantite_estimee})"
+
+
+class LigneOperationDevis(models.Model):
+    """
+    Detail operation d'une ligne de devis (RG39, mise a jour STI n°4).
+    Initialise par copie depuis LigneOperation du composant catalogue
+    au moment de la creation du devis, et ajustable ensuite via les
+    options du devis (OptionDevis).
+
+    cout_operation_estime de LigneDevis est la somme calculee des
+    cout_estime de ses LigneOperationDevis.
+
+    ExecutionOperation reference cette entite (plutot que LigneOperation
+    du catalogue) pour comparer le reel a l'engagement du devis (RG35,
+    RG39).
+    """
+
+    ligne_devis = models.ForeignKey(
+        LigneDevis, on_delete=models.CASCADE, related_name="lignes_operation"
+    )
+    poste = models.ForeignKey(
+        "catalogue.PosteDeCharge", on_delete=models.PROTECT,
+        related_name="lignes_operation_devis",
+    )
+    ordre_execution = models.PositiveSmallIntegerField(
+        help_text="Rang d'execution de l'operation dans la gamme.",
+    )
+    temps_estime = models.DecimalField(
+        max_digits=8, decimal_places=2,
+        help_text="Temps estimé pour cette opération, en minutes (RG39).",
+    )
+    cout_estime = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Coût estimé de cette ligne opération (calculé depuis le catalogue).",
+    )
+
+    class Meta:
+        db_table = "lignes_operation_devis"
+        verbose_name = "Ligne opération du devis"
+        verbose_name_plural = "Lignes opération du devis"
+        ordering = ["ligne_devis_id", "ordre_execution"]
+
+    def __str__(self):
+        return f"LigneDevis #{self.ligne_devis_id} — Op. {self.ordre_execution}"
+
 
 class Atelier(models.Model):
     """Atelier de production (RG6). Reference fixe : SPA et SPB."""
@@ -239,6 +485,10 @@ class Atelier(models.Model):
     chef_atelier = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="ateliers_diriges",
+    )
+    capacite = models.PositiveIntegerField(
+        default=0,
+        help_text="Capacité horaire de l'atelier (heures par période de référence).",
     )
 
     class Meta:
@@ -267,6 +517,10 @@ class DossierFabrication(models.Model):
         max_length=20, choices=Statut.choices, default=Statut.CREE
     )
     date_creation = models.DateTimeField(auto_now_add=True)
+    date_cloture = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Date de cloture effective du dossier de fabrication.",
+    )
 
     class Meta:
         db_table = "dossiers_fabrication"
@@ -294,17 +548,85 @@ class EtapeProduction(models.Model):
     dossier = models.ForeignKey(
         DossierFabrication, on_delete=models.CASCADE, related_name="etapes"
     )
+    ordre = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Ordre d'execution de l'etape dans le dossier.",
+    )
     libelle = models.CharField(max_length=100)
+    poste = models.ForeignKey(
+        "catalogue.PosteDeCharge", on_delete=models.PROTECT,
+        null=True, blank=True, related_name="etapes_production",
+        help_text="Poste de charge concerne par cette etape.",
+    )
     statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.A_FAIRE)
     date_debut = models.DateTimeField(null=True, blank=True)
     date_fin = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "etapes_production"
-        ordering = ["id"]
+        ordering = ["dossier_id", "ordre", "id"]
 
     def __str__(self):
         return f"{self.libelle} - {self.dossier.numero_dossier}"
+
+
+class ExecutionOperation(models.Model):
+    """
+    Execution reelle d'une operation sur un poste de charge, dans le cadre
+    d'un dossier de fabrication (RG35, mise a jour STI n°2 et n°3).
+
+    RG35 : chaque operation reellement executee fait l'objet d'une saisie
+    de temps reel, comparee a LigneOperationDevis correspondante (et non
+    a la valeur standard du catalogue) pour objectiver les ecarts.
+
+    RG38 : chaque operation transite par un statut explicite (PLANIFIEE,
+    EN_COURS, EXECUTEE), symetrique de la sortie de stock pour les
+    matieres.
+    """
+
+    class Statut(models.TextChoices):
+        PLANIFIEE = "PLANIFIEE", "Planifiée"
+        EN_COURS = "EN_COURS", "En cours"
+        EXECUTEE = "EXECUTEE", "Exécutée"
+
+    dossier = models.ForeignKey(
+        DossierFabrication, on_delete=models.CASCADE,
+        related_name="executions_operation",
+    )
+    ligne_operation_devis = models.ForeignKey(
+        LigneOperationDevis, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="executions",
+        help_text=(
+            "Ligne d'operation du devis correspondante (RG39) : "
+            "reference l'engagement du devis, pas le catalogue generique."
+        ),
+    )
+    poste = models.ForeignKey(
+        "catalogue.PosteDeCharge", on_delete=models.PROTECT,
+        related_name="executions_operation",
+    )
+    utilisateur = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="executions_saisies",
+    )
+    temps_reel = models.DecimalField(
+        max_digits=8, decimal_places=2,
+        help_text="Temps réellement passé, en minutes (RG35).",
+    )
+    statut = models.CharField(
+        max_length=15, choices=Statut.choices, default=Statut.PLANIFIEE,
+        help_text="Statut d'execution de l'operation (RG38).",
+    )
+    date_saisie = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "executions_operation"
+        verbose_name = "Exécution d'opération"
+        verbose_name_plural = "Exécutions d'opérations"
+        ordering = ["-date_saisie"]
+
+    def __str__(self):
+        return f"Exécution op. #{self.id} — dossier {self.dossier.numero_dossier}"
 
 
 class Article(models.Model):
@@ -329,6 +651,10 @@ class Article(models.Model):
     designation = models.CharField(
         max_length=100, unique=True,
         help_text="Désignation générique unique (ex. « papier offset », « encre noire »).",
+    )
+    emplacement_stock = models.CharField(
+        max_length=80, blank=True,
+        help_text="Emplacement de stockage de l'article au magasin (RG32, mise à jour STI).",
     )
     classe_comptable = models.CharField(
         max_length=10, choices=ClasseComptable.choices, default=ClasseComptable.CLASSE_6
@@ -374,14 +700,19 @@ class MouvementStock(models.Model):
     class TypeMouvement(models.TextChoices):
         ENTREE = "ENTREE", "Entrée"
         SORTIE = "SORTIE", "Sortie"
+        RESERVATION = "RESERVATION", "Réservation"
 
     article = models.ForeignKey(Article, on_delete=models.PROTECT, related_name="mouvements")
     dossier = models.ForeignKey(
         DossierFabrication, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="mouvements_stock",
     )
-    type_mouvement = models.CharField(max_length=10, choices=TypeMouvement.choices)
+    type_mouvement = models.CharField(max_length=15, choices=TypeMouvement.choices)
     quantite = models.DecimalField(max_digits=12, decimal_places=2)
+    commentaire = models.CharField(
+        max_length=255, blank=True,
+        help_text="Commentaire libre sur le mouvement de stock.",
+    )
     date_mouvement = models.DateTimeField(auto_now_add=True)
     valide_par = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -402,21 +733,21 @@ class MouvementStock(models.Model):
         if not est_nouveau:
             return
 
-        if self.type_mouvement == self.TypeMouvement.SORTIE:
+        if self.type_mouvement in (self.TypeMouvement.SORTIE, self.TypeMouvement.RESERVATION):
             # Mise a jour atomique et verification de disponibilite (RG11) :
             # ne decremente que si le stock est encore suffisant au moment
             # de l'ecriture, protegeant contre les acces concurrents.
+            # RESERVATION (RG34) reserve le stock avant sortie physique.
             nb_lignes_maj = Article.objects.filter(
                 pk=self.article_id, quantite_stock__gte=self.quantite
             ).update(quantite_stock=F("quantite_stock") - self.quantite)
 
             if not nb_lignes_maj:
                 # Annule le mouvement qui vient d'etre enregistre : le stock
-                # etait finalement insuffisant (cas rare de concurrence, la
-                # validation normale se fait en amont dans le serializer).
+                # etait finalement insuffisant.
                 MouvementStock.objects.filter(pk=self.pk).delete()
                 raise ValidationError(
-                    "Quantité en stock insuffisante pour cette sortie (RG11)."
+                    "Quantité en stock insuffisante pour cette sortie/réservation (RG11)."
                 )
         else:
             Article.objects.filter(pk=self.article_id).update(

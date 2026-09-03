@@ -16,6 +16,7 @@ import { COULEURS_RESULTAT_CONTROLE, LIBELLES_RESULTAT_CONTROLE } from "../const
 import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
 import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable";
 import PaginationBar from "../components/common/PaginationBar";
+import BoutonExport from "../components/common/BoutonExport";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
 
@@ -99,13 +100,60 @@ export default function ControlesListPage() {
       <PageHeader
         icone={<AssessmentIcon />}
         titre="Rentabilité"
-        sousTitre="Contrôle du prix de revient à la clôture et analyse de rentabilité (UC-06, UC-09, RG23-RG24)."
+        sousTitre="Contrôle du prix de revient à la clôture et analyse de rentabilité (UC-06, UC-09, RG23-RG24, RG28)."
         centre
         taillePastille={28}
         titreVariant="h6"
       />
 
       {erreur && <Alert severity="warning" sx={{ mb: 3 }}>{erreur}</Alert>}
+
+      {/* Bouton d'export */}
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+        <BoutonExport
+          surPdf={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterPDF({
+              fichier: `Rentabilite_${Date.now()}.pdf`,
+              titre: "Rapport de rentabilité",
+              sousTitre: "Contrôle du prix de revient à la clôture (UC-06, RG23-RG24, RG28)",
+              meta: e.metaEdition(controles.length),
+              colonnes: [
+                e.colonne("Dossier", "dossier_numero"),
+                e.colonne("Atelier", "atelier_nom"),
+                e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
+                e.colonnePerso("Coût réel", (c) => `${Number(c.cout_reel_total).toLocaleString("fr-FR")} Ar`, "right"),
+                e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
+                e.colonne("Résultat", "resultat"),
+              ],
+              lignes: controles,
+            });
+          }}
+          surExcel={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterExcel({
+              fichier: `Rentabilite_${Date.now()}.xlsx`,
+              feuilles: [{
+                nom: "Contrôles", titre: "Rapport de rentabilité",
+                meta: e.metaEdition(controles.length),
+                colonnes: [
+                  e.colonne("Dossier", "dossier_numero"),
+                  e.colonne("Atelier", "atelier_nom"),
+                  e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
+                  e.colonnePerso("Coût réel", (c) => Number(c.cout_reel_total).toLocaleString("fr-FR"), "right"),
+                  e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
+                  e.colonne("Résultat", "resultat"),
+                  e.colonnePerso("Écart", (c) => c.ecart_significatif ? "Significatif" : ""),
+                  e.colonnePerso("Date", (c) => new Date(c.date_controle).toLocaleDateString("fr-FR")),
+                ],
+                lignes: controles,
+              }],
+            });
+          }}
+          libelle="Exporter le rapport"
+          taille="small"
+        />
+      </Box>
 
       {/* Indicateurs (partie non scrollable) */}
       {indicateurs && (
@@ -115,9 +163,9 @@ export default function ControlesListPage() {
           gap: 2, mb: 3, flexShrink: 0,
         }}>
           <CarteChiffre titre="Dossiers contrôlés" valeur={indicateurs.nombre_controles} icone={<FactCheckIcon sx={{ fontSize: 20 }} />} />
-          <CarteChiffre titre="Bénéficiaires" valeur={indicateurs.nombre_beneficiaires} icone={<TrendingUpIcon sx={{ fontSize: 20 }} />} couleur="success.main" />
-          <CarteChiffre titre="Déficitaires" valeur={indicateurs.nombre_deficitaires} icone={<TrendingDownIcon sx={{ fontSize: 20 }} />} couleur="error.main" />
-          <CarteChiffre titre="À l'équilibre" valeur={indicateurs.nombre_a_l_equilibre} icone={<BalanceIcon sx={{ fontSize: 20 }} />} couleur="text.secondary" />
+          <CarteChiffre titre="Sous-marge" valeur={indicateurs.nombre_sous_marge} icone={<TrendingDownIcon sx={{ fontSize: 20 }} />} couleur="error.main" />
+          <CarteChiffre titre="Dans la norme" valeur={indicateurs.nombre_dans_la_norme} icone={<BalanceIcon sx={{ fontSize: 20 }} />} couleur="success.main" />
+          <CarteChiffre titre="Sur-marge" valeur={indicateurs.nombre_sur_marge} icone={<TrendingUpIcon sx={{ fontSize: 20 }} />} couleur="warning.main" />
           <CarteChiffre titre="Écarts significatifs" valeur={indicateurs.nombre_ecarts_significatifs} icone={<WarningAmberIcon sx={{ fontSize: 20 }} />} couleur="warning.main" />
           <CarteChiffre titre="Marge moyenne" valeur={`${indicateurs.marge_moyenne_pourcentage}%`} icone={<AssessmentIcon sx={{ fontSize: 20 }} />} />
         </Box>
@@ -137,6 +185,7 @@ export default function ControlesListPage() {
                 <TableCell align="center" sx={{ width: 48, ...STYLE_EN_TETE }}>#</TableCell>
                 <EnTeteTriable cle="dossier_numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Dossier</EnTeteTriable>
                 <EnTeteTriable cle="atelier_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Atelier</EnTeteTriable>
+                <EnTeteTriable cle="composant_ordre" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Composant</EnTeteTriable>
                 <EnTeteTriable cle="cout_reel_total" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Coût réel</EnTeteTriable>
                 <EnTeteTriable cle="marge_reelle_pourcentage" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Marge réelle</EnTeteTriable>
                 <EnTeteTriable cle="resultat" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Résultat</EnTeteTriable>
@@ -157,6 +206,11 @@ export default function ControlesListPage() {
                   </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 600 }}>{controle.dossier_numero}</TableCell>
                   <TableCell align="center">{controle.atelier_nom}</TableCell>
+                  <TableCell align="center">
+                    {controle.composant_designation
+                      ? `C${controle.composant_ordre} · ${controle.composant_designation}`
+                      : "Global"}
+                  </TableCell>
                   <TableCell align="center">{Number(controle.cout_reel_total).toLocaleString("fr-FR")} Ar</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 600 }}>{controle.marge_reelle_pourcentage}%</TableCell>
                   <TableCell align="center">
@@ -173,7 +227,7 @@ export default function ControlesListPage() {
               ))}
               {controles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5, color: "text.secondary" }}>
                     Aucun contrôle de prix de revient enregistré pour le moment.
                   </TableCell>
                 </TableRow>

@@ -17,9 +17,9 @@ export const supprimerProduit = (id) => axiosClient.delete(`/catalogue/produits/
 export const creerComposant = (donnees) => axiosClient.post("/catalogue/composants/", donnees).then((r) => r.data);
 export const supprimerComposant = (id) => axiosClient.delete(`/catalogue/composants/${id}/`).then((r) => r.data);
 
-// --- Machines / postes ---
-export const listerMachines = () => axiosClient.get("/catalogue/machines/").then((r) => r.data);
-export const creerMachine = (donnees) => axiosClient.post("/catalogue/machines/", donnees).then((r) => r.data);
+// --- Postes de charge (RG31, ex-machines) ---
+export const listerPostesDeCharge = () => axiosClient.get("/catalogue/postes-de-charge/").then((r) => r.data);
+export const creerPosteDeCharge = (donnees) => axiosClient.post("/catalogue/postes-de-charge/", donnees).then((r) => r.data);
 
 // --- Lignes de nomenclature (matière première / opération) ---
 export const creerLigneMatiere = (donnees) =>

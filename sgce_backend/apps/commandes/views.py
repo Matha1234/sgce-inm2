@@ -11,7 +11,11 @@ from .models import (
     Devis,
     DossierFabrication,
     EtapeProduction,
+    ExecutionOperation,
+    LigneMatiereDevis,
+    LigneOperationDevis,
     MouvementStock,
+    OptionDevis,
     OrganismeClient,
 )
 from .serializers import (
@@ -21,7 +25,11 @@ from .serializers import (
     DevisSerializer,
     DossierFabricationSerializer,
     EtapeProductionSerializer,
+    ExecutionOperationSerializer,
+    LigneMatiereDevisSerializer,
+    LigneOperationDevisSerializer,
     MouvementStockSerializer,
+    OptionDevisSerializer,
     OrganismeClientSerializer,
 )
 
@@ -89,11 +97,20 @@ class DevisCreateView(generics.CreateAPIView):
             # calculé automatiquement, composant par composant, plutôt que
             # saisi manuellement.
             commande = serializer.validated_data["commande"]
-            prix_revient_kwargs["prix_revient"] = produit_catalogue.calculer_prix_revient(
-                commande.quantite
-            )
+            resultat = produit_catalogue.calculer_prix_revient(commande.quantite)
+            prix_revient_kwargs["prix_revient"] = resultat["prix_revient"]
 
         devis = serializer.save(**prix_revient_kwargs)
+
+        if produit_catalogue:
+            # RG27 + RG28 : génère les LigneDevis (chiffrage prévisionnel par
+            # composant) et applique les remarques techniques de l'Agent SDO,
+            # qui prévalent sur le catalogue en cas de divergence (RG30).
+            remarques = {
+                r["composant"]: r.get("remarque", "")
+                for r in serializer.validated_data.get("remarques_lignes", [])
+            }
+            devis.generer_lignes_devis(remarques)
 
         from apps.ia.ml.estimation_service import predire_cout
         from apps.ia.ml.inflation_service import projeter_devis_pluriannuel
@@ -299,3 +316,103 @@ class MouvementStockListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(valide_par=self.request.user)
+
+
+# ------------------------------------------------------------------
+# Options de devis, details matiere/operation, executions
+# ------------------------------------------------------------------
+
+class OptionDevisListCreateView(generics.ListCreateAPIView):
+    """
+    Liste et creation des options de personnalisation d'un devis (RG33).
+    Accessible en lecture a tout utilisateur authentifie ;
+    creation reservee a l'Agent SDO (et l'Administrateur).
+    """
+
+    queryset = OptionDevis.objects.select_related("devis").all()
+    serializer_class = OptionDevisSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAgentSDO()]
+        return [IsAuthenticated()]
+
+
+class LigneMatiereDevisListCreateView(generics.ListCreateAPIView):
+    """
+    Liste et creation des lignes matiere d'une ligne de devis (RG39).
+    Accessible en lecture a tout utilisateur authentifie ;
+    creation reservee a l'Agent SDO.
+    """
+
+    queryset = LigneMatiereDevis.objects.select_related("article", "ligne_devis").all()
+    serializer_class = LigneMatiereDevisSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAgentSDO()]
+        return [IsAuthenticated()]
+
+
+class LigneOperationDevisListCreateView(generics.ListCreateAPIView):
+    """
+    Liste et creation des lignes operation d'une ligne de devis (RG39).
+    Accessible en lecture a tout utilisateur authentifie ;
+    creation reservee a l'Agent SDO.
+    """
+
+    queryset = LigneOperationDevis.objects.select_related("poste", "ligne_devis").all()
+    serializer_class = LigneOperationDevisSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAgentSDO()]
+        return [IsAuthenticated()]
+
+
+class ExecutionOperationListCreateView(generics.ListCreateAPIView):
+    """
+    Liste et creation des executions d'operation sur un poste (RG35, RG38).
+    Accessible en lecture a tout utilisateur authentifie ;
+    creation reservee au Chef d'atelier (et l'Administrateur).
+    """
+
+    queryset = ExecutionOperation.objects.select_related(
+        "dossier", "poste", "ligne_operation_devis", "utilisateur"
+    ).all()
+    serializer_class = ExecutionOperationSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsChefAtelier()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(utilisateur=self.request.user)
+
+
+class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
+    """
+    Consultation et mise a jour d'une execution d'operation.
+    Modification reservee au Chef d'atelier (ou l'Administrateur).
+    """
+
+    queryset = ExecutionOperation.objects.select_related(
+        "dossier", "poste", "ligne_operation_devis", "utilisateur"
+    ).all()
+    serializer_class = ExecutionOperationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        execution = self.get_object()
+        user = self.request.user
+        est_admin = getattr(user, "role", None) == "ADMIN"
+        est_chef_du_bon_atelier = (
+            execution.dossier.atelier.chef_atelier_id == user.id
+        )
+        if not (est_admin or est_chef_du_bon_atelier):
+            raise PermissionDenied(
+                "Seul le chef de l'atelier concerné (ou l'Administrateur) "
+                "peut modifier cette saisie (RG17)."
+            )
+        serializer.save()

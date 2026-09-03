@@ -21,6 +21,7 @@ import {
 import PageHeader from "../components/common/PageHeader";
 import SearchField from "../components/common/SearchField";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import BoutonExport from "../components/common/BoutonExport";
 import { useNotifier } from "../components/common/Notifier";
 import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable";
 import PaginationBar from "../components/common/PaginationBar";
@@ -40,7 +41,7 @@ const LIBELLES_MOUVEMENT = { ENTREE: "Entrée", SORTIE: "Sortie" };
 const COULEURS_MOUVEMENT = { ENTREE: "success", SORTIE: "warning" };
 
 const ARTICLE_VIDE = {
-  designation: "", classe_comptable: "CLASSE_6", type_papier: "NON_APPLICABLE",
+  designation: "", emplacement_stock: "", classe_comptable: "CLASSE_6", type_papier: "NON_APPLICABLE",
   unite: "unité", cout_unitaire: "", seuil_securite: "",
 };
 
@@ -99,7 +100,7 @@ export default function StockPage() {
     const q = recherche.trim().toLowerCase();
     if (!q) return articles;
     return articles.filter((a) =>
-      [a.designation, a.classe_comptable, a.unite]
+      [a.designation, a.classe_comptable, a.unite, a.emplacement_stock]
         .filter(Boolean).some((champ) => String(champ).toLowerCase().includes(q))
     );
   }, [articles, recherche]);
@@ -137,7 +138,8 @@ export default function StockPage() {
   const ouvrirModificationArticle = (article) => {
     setArticleEnEdition(article);
     setFormulaireArticle({
-      designation: article.designation, classe_comptable: article.classe_comptable,
+      designation: article.designation, emplacement_stock: article.emplacement_stock || "",
+      classe_comptable: article.classe_comptable,
       type_papier: article.type_papier || "NON_APPLICABLE", unite: article.unite,
       cout_unitaire: String(article.cout_unitaire ?? ""), seuil_securite: String(article.seuil_securite ?? ""),
     });
@@ -149,7 +151,8 @@ export default function StockPage() {
     setErreur("");
     try {
       const donnees = {
-        designation: formulaireArticle.designation.trim(), classe_comptable: formulaireArticle.classe_comptable,
+        designation: formulaireArticle.designation.trim(), emplacement_stock: (formulaireArticle.emplacement_stock || "").trim(),
+        classe_comptable: formulaireArticle.classe_comptable,
         type_papier: formulaireArticle.type_papier, unite: formulaireArticle.unite,
         cout_unitaire: formulaireArticle.cout_unitaire || 0, seuil_securite: formulaireArticle.seuil_securite || 0,
       };
@@ -234,6 +237,56 @@ export default function StockPage() {
         <SearchField valeur={recherche} onChange={(e) => gererRecherche(e.target.value)}
           placeholder="Rechercher un article par désignation, classe ou unité…"
           largeur={400} sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }} />
+        <BoutonExport
+          surPdf={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterPDF({
+              fichier: `Stock_${Date.now()}.pdf`,
+              titre: "Inventaire des articles",
+              meta: e.metaEdition(articlesFiltres.length),
+              colonnes: [
+                e.colonne("Article", "designation"),
+                e.colonne("Emplacement", "emplacement_stock"),
+                e.colonnePerso("Coût unitaire", (a) => `${Number(a.cout_unitaire).toLocaleString("fr-FR")} Ar`, "right"),
+                e.colonnePerso("Stock", (a) => Number(a.quantite_stock).toLocaleString("fr-FR"), "right"),
+                e.colonnePerso("Seuil", (a) => Number(a.seuil_securite).toLocaleString("fr-FR"), "right"),
+              ],
+              lignes: articlesFiltres,
+            });
+          }}
+          surExcel={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterExcel({
+              fichier: `Stock_${Date.now()}.xlsx`,
+              feuilles: [{
+                nom: "Articles", titre: "Inventaire des articles",
+                meta: e.metaEdition(articlesFiltres.length),
+                colonnes: [
+                  e.colonne("Article", "designation"),
+                  e.colonne("Emplacement", "emplacement_stock"),
+                  e.colonnePerso("Unité", (a) => a.unite),
+                  e.colonnePerso("Coût unitaire", (a) => Number(a.cout_unitaire).toLocaleString("fr-FR"), "right"),
+                  e.colonnePerso("Stock actuel", (a) => Number(a.quantite_stock).toLocaleString("fr-FR"), "right"),
+                  e.colonnePerso("Seuil sécurité", (a) => Number(a.seuil_securite).toLocaleString("fr-FR"), "right"),
+                ],
+                lignes: articlesFiltres,
+              }, {
+                nom: "Mouvements", titre: "Historique des mouvements",
+                meta: e.metaEdition(mouvements.length),
+                colonnes: [
+                  e.colonnePerso("Date", (m) => new Date(m.date_mouvement).toLocaleString("fr-FR")),
+                  e.colonne("Article", "article_designation"),
+                  e.colonne("Type", "type_mouvement"),
+                  e.colonnePerso("Quantité", (m) => Number(m.quantite).toLocaleString("fr-FR"), "right"),
+                  e.colonne("Dossier", "dossier_numero"),
+                ],
+                lignes: mouvements,
+              }],
+            });
+          }}
+          libelle="Exporter"
+          taille="small"
+        />
         {peutGererStock && (
           <Button variant="contained" size="small" startIcon={<AddIcon />}
             onClick={ouvrirCreationArticle} sx={{ flexShrink: 0, whiteSpace: "nowrap" }}>
@@ -275,7 +328,14 @@ export default function StockPage() {
                           {page * surPage + index + 1}
                         </Typography>
                       </TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600 }}>{article.designation}</TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 600 }}>
+                        {article.designation}
+                        {article.emplacement_stock && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 400 }}>
+                            {article.emplacement_stock}
+                          </Typography>
+                        )}
+                      </TableCell>
                       <TableCell align="center">{LIBELLES_CLASSE[article.classe_comptable] || article.classe_comptable}</TableCell>
                       <TableCell align="center">{article.unite}</TableCell>
                       <TableCell align="center">{Number(article.cout_unitaire).toLocaleString("fr-FR")} Ar</TableCell>
@@ -400,6 +460,9 @@ export default function StockPage() {
             <TextField label="Désignation générique" value={formulaireArticle.designation}
               onChange={(e) => setFormulaireArticle((f) => ({ ...f, designation: e.target.value }))}
               fullWidth required helperText="Unique en base (ex. « papier offset », « encre noire »)." />
+            <TextField label="Emplacement de stockage (RG32)" value={formulaireArticle.emplacement_stock}
+              onChange={(e) => setFormulaireArticle((f) => ({ ...f, emplacement_stock: e.target.value }))}
+              fullWidth helperText="Emplacement au magasin, ex. « Rayon 2 — étagère B »." />
             <Stack direction="row" spacing={2}>
               <TextField select label="Classe comptable" value={formulaireArticle.classe_comptable}
                 onChange={(e) => setFormulaireArticle((f) => ({ ...f, classe_comptable: e.target.value }))} fullWidth>

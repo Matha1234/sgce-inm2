@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Composant, FamilleProduit, LigneMatierePremiere, LigneOperation, Machine, Produit
+from .models import (
+    Composant,
+    FamilleProduit,
+    LigneMatierePremiere,
+    LigneOperation,
+    PosteDeCharge,
+    Produit,
+)
 
 
 class ComposantInline(admin.TabularInline):
@@ -37,6 +44,7 @@ class ComposantAdmin(admin.ModelAdmin):
     inlines = [LigneMatierePremiereInline, LigneOperationInline]
 
 
-@admin.register(Machine)
-class MachineAdmin(admin.ModelAdmin):
-    list_display = ["nom", "cout_horaire"]
+@admin.register(PosteDeCharge)
+class PosteDeChargeAdmin(admin.ModelAdmin):
+    list_display = ["nom", "type_poste", "cout_horaire"]
+    list_filter = ["type_poste"]

@@ -16,5 +16,5 @@ class EstimationInputSerializer(serializers.Serializer):
 class EstimationIASerializer(serializers.ModelSerializer):
     class Meta:
         model = EstimationIA
-        fields = ["id", "devis", "prix_predit", "duree_predite", "date_estimation", "version_modele"]
+        fields = ["id", "devis", "prix_predit", "duree_predite", "date_estimation", "version_modele", "methode", "score_confiance"]
         read_only_fields = fields

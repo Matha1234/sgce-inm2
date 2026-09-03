@@ -15,7 +15,12 @@ import {
   estimerPrixRevientCatalogue, listerProduits,
 } from "../../api/catalogueApi";
 import ConfirmDialog from "../common/ConfirmDialog";
+import BoutonExport from "../common/BoutonExport";
 import { useNotifier } from "../common/Notifier";
+import {
+  exporterPDF, exporterWord, metaEdition,
+  colonne, colonnePerso, DATE_FR,
+} from "../../utils/exportateur";
 import {
   COULEURS_STATUT_COMMANDE, LIBELLES_NATURE_COMMANDE, LIBELLES_STATUT_COMMANDE,
 } from "../../constants/roles";
@@ -69,6 +74,8 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
   const [produitsCatalogue, setProduitsCatalogue] = useState([]);
   const [produitCatalogueId, setProduitCatalogueId] = useState("");
   const [estimationCatalogue, setEstimationCatalogue] = useState(null);
+  // RG30 : remarque technique par composant (optionnelle), envoyée à la création du devis.
+  const [remarquesLignes, setRemarquesLignes] = useState({});
 
   const charger = () => {
     setChargement(true);
@@ -93,6 +100,7 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
 
   const gererChoixProduitCatalogue = async (id) => {
     setProduitCatalogueId(id);
+    setRemarquesLignes({});
     if (!id) {
       setEstimationCatalogue(null);
       return;
@@ -122,14 +130,22 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
     }
     setEnCours(true);
     try {
+      // RG30 : les remarques renseignées composant par composant seront
+      // portées par les LigneDevis générées et prévaudront sur le catalogue.
+      const remarques = Object.entries(remarquesLignes)
+        .filter(([, valeur]) => valeur && valeur.trim() !== "")
+        .map(([composant, remarque]) => ({ composant: Number(composant), remarque }));
       await creerDevis({
         commande: commande.id,
         produit_catalogue: produitCatalogueId || null,
-        prix_revient: prixRevient || null,
+        // RG27 : pour un devis catalogue, le serveur recalcule le prix de
+        // revient depuis la nomenclature — l'envoyer provoquerait un rejet.
+        prix_revient: produitCatalogueId ? undefined : prixRevient || null,
         prix_vente: prixVente,
         duree_production: dureeProduction,
         pluriannuel,
         duree_contrat_annees: pluriannuel ? dureeContratAnnees : null,
+        remarques_lignes: remarques.length > 0 ? remarques : undefined,
       });
       afficherSucces("Devis créé avec succès.");
       charger();
@@ -302,12 +318,29 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                       </Box>
                     )}
                     {estimationCatalogue?.donnees && (
-                      <Alert severity="success" sx={{ my: 1 }}>
-                        Prix de revient calculé composant par composant pour{" "}
-                        <strong>{estimationCatalogue.donnees.quantite}</strong> exemplaire
-                        {estimationCatalogue.donnees.quantite > 1 ? "s" : ""} :{" "}
-                        <strong>{Number(estimationCatalogue.donnees.prix_revient_catalogue).toLocaleString("fr-FR")} Ar</strong>
-                      </Alert>
+                      <>
+                        <Alert severity="success" sx={{ my: 1 }}>
+                          Prix de revient calculé composant par composant pour{" "}
+                          <strong>{estimationCatalogue.donnees.quantite}</strong> exemplaire
+                          {estimationCatalogue.donnees.quantite > 1 ? "s" : ""} :{" "}
+                          <strong>{Number(estimationCatalogue.donnees.prix_revient_catalogue).toLocaleString("fr-FR")} Ar</strong>
+                        </Alert>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                          Remarques par composant (RG30, optionnel) — prévalent sur le catalogue en cas de divergence.
+                        </Typography>
+                        {(estimationCatalogue.donnees.detail_composants || []).map((c) => (
+                          <TextField
+                            key={c.composant_id}
+                            size="small"
+                            label={`Composant ${c.ordre} — ${c.designation}`}
+                            value={remarquesLignes[c.composant_id] || ""}
+                            onChange={(e) => setRemarquesLignes((s) => ({ ...s, [c.composant_id]: e.target.value }))}
+                            fullWidth
+                            margin="dense"
+                            slotProps={{ htmlInput: { maxLength: 255 } }}
+                          />
+                        ))}
+                      </>
                     )}
                     {estimationCatalogue?.erreur && (
                       <Alert severity="warning" sx={{ my: 1 }}>{estimationCatalogue.erreur}</Alert>
@@ -322,9 +355,14 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                     value={prixRevient}
                     onChange={(e) => setPrixRevient(e.target.value)}
                     required={!produitCatalogueId}
+                    disabled={Boolean(produitCatalogueId)}
                     fullWidth
                     margin="dense"
-                    helperText={produitCatalogueId ? "Calculé automatiquement depuis le catalogue." : undefined}
+                    helperText={
+                      produitCatalogueId
+                        ? "Calculé automatiquement depuis le catalogue (RG27) — non modifiable."
+                        : undefined
+                    }
                   />
                   <TextField
                     label="Prix de vente (Ar)"
@@ -410,6 +448,107 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                     <LigneInfo
                       libelle="Taux d'inflation projeté"
                       valeur={devis.taux_inflation_projete ? `${devis.taux_inflation_projete} %` : "—"}
+                    />
+                  </>
+                )}
+
+                {devis.lignes_devis?.length > 0 && (
+                  <>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      Lignes de devis — prévisionnel par composant (RG27, RG28)
+                    </Typography>
+                    {devis.lignes_devis.map((l) => (
+                      <Box
+                        key={l.id}
+                        sx={{ mb: 1, p: 1, borderRadius: 1, border: "1px solid", borderColor: "divider" }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          Composant {l.composant_ordre} — {l.composant_designation}
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Matières : {Number(l.cout_matiere_estime).toLocaleString("fr-FR")} Ar
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Opérations : {Number(l.cout_operation_estime).toLocaleString("fr-FR")} Ar
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                            Total : {Number(l.cout_total_estime).toLocaleString("fr-FR")} Ar
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          Dont fixe amorti : {Number(l.part_fixe_amortie).toLocaleString("fr-FR")} Ar —
+                          variable : {Number(l.part_variable).toLocaleString("fr-FR")} Ar (RG29)
+                        </Typography>
+                        {l.remarque && (
+                          <Typography variant="caption" sx={{ display: "block", mt: 0.5, fontStyle: "italic" }}>
+                            Remarque (RG30) : {l.remarque}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                    <BoutonExport
+                      surPdf={async () => {
+                        const c = commande;
+                        const cols = [
+                          colonnePerso("Composant", (l) => `${l.composant_ordre} — ${l.composant_designation}`),
+                          colonnePerso("Matières (Ar)", (l) => Number(l.cout_matiere_estime).toLocaleString("fr-FR"), "right"),
+                          colonnePerso("Opérations (Ar)", (l) => Number(l.cout_operation_estime).toLocaleString("fr-FR"), "right"),
+                          colonnePerso("Total (Ar)", (l) => Number(l.cout_total_estime).toLocaleString("fr-FR"), "right"),
+                          colonnePerso("Fixe amorti", (l) => Number(l.part_fixe_amortie).toLocaleString("fr-FR"), "right"),
+                          colonnePerso("Variable", (l) => Number(l.part_variable).toLocaleString("fr-FR"), "right"),
+                          colonne("remarque", "remarque", "left"),
+                        ];
+                        const meta = [
+                          { libelle: "Commande", valeur: c.numero },
+                          { libelle: "Organisme", valeur: c.organisme_nom },
+                          { libelle: "Date", valeur: DATE_FR(c.date_commande) },
+                          { libelle: "Quantité", valeur: String(c.quantite) },
+                          { libelle: "Atelier", valeur: c.atelier },
+                          { libelle: "Délai", valeur: c.delai_contractuel || "—" },
+                          ...metaEdition(devis.lignes_devis.length, "Devis"),
+                        ];
+                        await exporterPDF({
+                          fichier: `Devis_${c.numero}_${Date.now()}.pdf`,
+                          titre: `Devis n°${c.numero}`,
+                          sousTitre: produitCatalogueNom || "Hors catalogue",
+                          meta,
+                          colonnes: cols,
+                          lignes: devis.lignes_devis,
+                          note: `Prix de revient : ${Number(devis.prix_revient).toLocaleString("fr-FR")} Ar  |  Prix de vente : ${Number(devis.prix_vente).toLocaleString("fr-FR")} Ar  |  Durée : ${devis.duree_production} j`,
+                          signatures: [
+                            { titre: "L'Agent SDO", nom: "" },
+                            { titre: "Validation", nom: devis.valide ? "Validé" : "En attente" },
+                          ],
+                        });
+                      }}
+                      surWord={async () => {
+                        const c = commande;
+                        const cols = [
+                          colonnePerso("Composant", (l) => `C${l.composant_ordre} — ${l.composant_designation}`),
+                          colonnePerso("Total (Ar)", (l) => Number(l.cout_total_estime).toLocaleString("fr-FR"), "right"),
+                          colonnePerso("Fixe/Variable", (l) => `${Number(l.part_fixe_amortie).toLocaleString("fr-FR")} / ${Number(l.part_variable).toLocaleString("fr-FR")}`, "center"),
+                          colonne("remarque", "remarque", "left"),
+                        ];
+                        await exporterWord({
+                          fichier: `Devis_${c.numero}_${Date.now()}.docx`,
+                          titre: `Devis n°${c.numero}`,
+                          sousTitre: produitCatalogueNom || "Hors catalogue",
+                          meta: [
+                            { libelle: "Commande", valeur: c.numero },
+                            { libelle: "Organisme", valeur: c.organisme_nom },
+                            { libelle: "Quantité", valeur: String(c.quantite) },
+                            { libelle: "Prix revient", valeur: `${Number(devis.prix_revient).toLocaleString("fr-FR")} Ar` },
+                            { libelle: "Prix vente", valeur: `${Number(devis.prix_vente).toLocaleString("fr-FR")} Ar` },
+                          ],
+                          colonnes: cols,
+                          lignes: devis.lignes_devis,
+                          note: `Durée de production : ${devis.duree_production} jours — ${devis.valide ? "Validé" : "En attente de validation"}`,
+                        });
+                      }}
+                      libelle="Exporter le devis"
+                      taille="small"
                     />
                   </>
                 )}

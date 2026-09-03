@@ -55,13 +55,13 @@ export const LIBELLES_STATUT_ETAPE = {
 };
 
 export const LIBELLES_RESULTAT_CONTROLE = {
-  BENEFICIAIRE: "Bénéficiaire",
-  DEFICITAIRE: "Déficitaire",
-  EQUILIBRE: "À l'équilibre",
+  SOUS_MARGE: "Sous-marge (déficitaire)",
+  DANS_LA_NORME: "Dans la norme",
+  SUR_MARGE: "Sur-marge (surestimation)",
 };
 
 export const COULEURS_RESULTAT_CONTROLE = {
-  BENEFICIAIRE: "success",
-  DEFICITAIRE: "error",
-  EQUILIBRE: "default",
+  SOUS_MARGE: "error",
+  DANS_LA_NORME: "success",
+  SUR_MARGE: "warning",
 };

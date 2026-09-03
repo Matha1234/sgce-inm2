@@ -25,6 +25,7 @@ import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable
 import PaginationBar from "../components/common/PaginationBar";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
+import BoutonExport from "../components/common/BoutonExport";
 
 const COMPTE_VIDE = {
   username: "", email: "", first_name: "", last_name: "", password: "", role: "AGENT_SDO",
@@ -209,6 +210,46 @@ export default function UtilisateursPage() {
         <SearchField valeur={recherche} onChange={(e) => gererRecherche(e.target.value)}
           placeholder="Rechercher par identifiant, nom, email ou rôle…"
           largeur={400} sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }} />
+        <BoutonExport
+          surPdf={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterPDF({
+              fichier: `Utilisateurs_${Date.now()}.pdf`,
+              titre: "Liste des comptes utilisateurs",
+              sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : "",
+              meta: e.metaEdition(utilisateursEnrichis.length),
+              colonnes: [
+                e.colonnePerso("Utilisateur", (u) => `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username, "left"),
+                e.colonnePerso("Identifiant", (u) => `@${u.username}`),
+                e.colonne("Email", "email", "left"),
+                e.colonnePerso("R\u00f4le", (u) => LIBELLES_ROLES[u.role] || u.role),
+                e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "D\u00e9sactiv\u00e9"),
+              ],
+              lignes: utilisateursEnrichis,
+            });
+          }}
+          surExcel={async () => {
+            const e = await import("../utils/exportateur");
+            await e.exporterExcel({
+              fichier: `Utilisateurs_${Date.now()}.xlsx`,
+              feuilles: [{
+                nom: "Utilisateurs", titre: "Liste des comptes utilisateurs",
+                sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : "",
+                meta: e.metaEdition(utilisateursEnrichis.length),
+                colonnes: [
+                  e.colonnePerso("Utilisateur", (u) => `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username, "left"),
+                  e.colonnePerso("Identifiant", (u) => `@${u.username}`),
+                  e.colonne("Email", "email", "left"),
+                  e.colonnePerso("R\u00f4le", (u) => LIBELLES_ROLES[u.role] || u.role),
+                  e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "D\u00e9sactiv\u00e9"),
+                ],
+                lignes: utilisateursEnrichis,
+              }],
+            });
+          }}
+          libelle="Exporter"
+          taille="small"
+        />
         <Button variant="contained" size="small" startIcon={<AddIcon />}
           onClick={ouvrirCreation} sx={{ flexShrink: 0, whiteSpace: "nowrap" }}>
           Nouveau compte
