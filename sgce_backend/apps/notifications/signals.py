@@ -218,6 +218,30 @@ def _notifier_mouvement_stock(sender, instance, created, **kwargs):
         except Article.DoesNotExist:
             return
 
+        magasiniers = list(_magasiniers())
+        admins = list(_admins())
+
+        # 1) Notification systématique aux Magasiniers (+ Admin) pour toute
+        #    action sur un article (entrée, sortie, réservation).
+        libelles_type = {
+            MouvementStock.TypeMouvement.ENTREE: "Entrée",
+            MouvementStock.TypeMouvement.SORTIE: "Sortie",
+            MouvementStock.TypeMouvement.RESERVATION: "Réservation",
+        }
+        libelle = libelles_type.get(type_mouvement, type_mouvement)
+        message_mouvement = (
+            f"{libelle} de {quantite} {article.unite} de « {article.designation} » "
+            f"enregistrée (disponible : {article.quantite_disponible} {article.unite})."
+        )
+        _notifier(
+            magasiniers + admins,
+            Notification.Categorie.STOCK,
+            message_mouvement,
+            mouvement_id,
+        )
+
+        # 2) Sortie / réservation rattachée à un dossier : informer aussi le
+        #    Chef d'atelier concerné (boucle PR-07).
         if type_mouvement in (MouvementStock.TypeMouvement.SORTIE, MouvementStock.TypeMouvement.RESERVATION) and dossier_id:
             try:
                 dossier = DossierFabrication.objects.select_related("atelier", "commande").get(
@@ -225,31 +249,39 @@ def _notifier_mouvement_stock(sender, instance, created, **kwargs):
                 )
             except DossierFabrication.DoesNotExist:
                 dossier = None
-            if dossier is not None:
-                message = (
-                    f"Sortie de {quantite} {article.unite} de « {article.designation} » "
+            if dossier is not None and dossier.atelier.chef_atelier_id:
+                message_chef = (
+                    f"{libelle} de {quantite} {article.unite} de « {article.designation} » "
                     f"confirmée pour le dossier {dossier.numero_dossier}."
                 )
-                destinataires = list(_admins())
-                if dossier.atelier.chef_atelier_id:
-                    destinataires.append(dossier.atelier.chef_atelier)
-                _notifier(destinataires, Notification.Categorie.STOCK, message, mouvement_id)
+                _notifier(
+                    [dossier.atelier.chef_atelier],
+                    Notification.Categorie.STOCK,
+                    message_chef,
+                    mouvement_id,
+                )
 
-        # Quantite avant ce mouvement, deduite du delta applique en base.
-        quantite_avant = (
-            article.quantite_stock + quantite
-            if type_mouvement in (MouvementStock.TypeMouvement.SORTIE, MouvementStock.TypeMouvement.RESERVATION)
-            else article.quantite_stock - quantite
-        )
-        etait_en_alerte = quantite_avant <= article.seuil_securite
+        # 3) Franchissement du seuil de sécurité (disponible passe sous le seuil).
+        #    disponible = quantite_stock - quantite_reservee.
+        disponible_apres = article.quantite_disponible
+        if type_mouvement == MouvementStock.TypeMouvement.RESERVATION:
+            disponible_avant = disponible_apres + quantite
+        elif type_mouvement == MouvementStock.TypeMouvement.SORTIE:
+            disponible_avant = disponible_apres + quantite
+        elif type_mouvement == MouvementStock.TypeMouvement.ENTREE:
+            disponible_avant = disponible_apres - quantite
+        else:
+            disponible_avant = disponible_apres
+
+        etait_en_alerte = disponible_avant <= article.seuil_securite
 
         if article.est_en_alerte and not etait_en_alerte:
             message_alerte = (
                 f"Stock de « {article.designation} » passé sous le seuil de sécurité "
-                f"({article.quantite_stock} {article.unite} restants, seuil {article.seuil_securite})."
+                f"({disponible_apres} {article.unite} disponibles, seuil {article.seuil_securite})."
             )
             _notifier(
-                list(_admins()) + list(_magasiniers()),
+                magasiniers + admins,
                 Notification.Categorie.STOCK,
                 message_alerte,
                 article.pk,

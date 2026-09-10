@@ -19,7 +19,7 @@ import LOGO_URL from "../assets/logo-inm.png";
 export const COULEUR = [21, 101, 192]; // #1565c0 — bleu INM
 export const COULEUR_HEX = "#1565c0";
 export const ORGANISME = "REPUBLIQUE DE MADAGASCAR";
-export const ORGANISME_SOUS = "Imprimerie Nationale — SGCFC";
+export const ORGANISME_SOUS = "Imprimerie Nationale — SGCFC-INM";
 const RATIO_LOGO = 265 / 90; // largeur / hauteur (265×90 px)
 
 // ---- CACHE DU LOGO (base64 + Uint8Array) -----------------------------------
@@ -104,7 +104,7 @@ export async function exporterPDF({
       doc.line(M, 286, L - M, 286);
       doc.setFontSize(6.5);
       doc.setTextColor(130, 130, 130);
-      doc.text("IMPRIMERIE NATIONALE — SGCFC", M, 290);
+      doc.text("IMPRIMERIE NATIONALE — SGCFC-INM", M, 290);
       doc.text(`Page ${i} / ${total}`, L - M, 290, { align: "right" });
       doc.text(MAINTENANT_FR(), M, 293);
     }
@@ -123,7 +123,7 @@ export async function exporterPDF({
   doc.text("Imprimerie Nationale", L - M, 19, { align: "right" });
   doc.setFontSize(7);
   doc.setTextColor(130, 130, 130);
-  doc.text("SGCFC — Système de Gestion des Commandes et de la Facturation", L - M, 24, { align: "right" });
+  doc.text("SGCFC-INM — Système de Gestion des Coûts, de la Fabrication et du Contrôle du Prix de Revient", L - M, 24, { align: "right" });
   doc.setDrawColor(...COULEUR);
   doc.setLineWidth(0.6);
   doc.line(M, 29, L - M, 29);
@@ -244,7 +244,7 @@ export async function exporterPDF({
 export async function exporterExcel({ fichier, feuilles }) {
   const ExcelJS = (await import("exceljs")).default;
   const classeur = new ExcelJS.Workbook();
-  classeur.creator = "SGCFC — Imprimerie Nationale";
+  classeur.creator = "SGCFC-INM — Imprimerie Nationale";
   classeur.created = new Date();
 
   const { dataUrl } = await _chargerLogo();
@@ -493,7 +493,7 @@ export async function exporterWord({
 
   // ── Document
   const doc = new Document({
-    creator: "SGCFC — Imprimerie Nationale",
+    creator: "SGCFC-INM — Imprimerie Nationale",
     styles: {
       default: {
         document: {
@@ -552,7 +552,7 @@ export async function exporterWord({
                   top: { style: BorderStyle.SINGLE, size: 4, color: "D2D8E2" },
                 },
                 children: [
-                  new TextRun({ text: "IMPRIMERIE NATIONALE — SGCFC  |  ", size: 16, color: "999999", font: "Calibri" }),
+                  new TextRun({ text: "IMPRIMERIE NATIONALE — SGCFC-INM  |  ", size: 16, color: "999999", font: "Calibri" }),
                   new TextRun({ text: "Page ", size: 16, color: "999999", font: "Calibri" }),
                   new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "999999", font: "Calibri" }),
                   new TextRun({ text: " sur ", size: 16, color: "999999", font: "Calibri" }),

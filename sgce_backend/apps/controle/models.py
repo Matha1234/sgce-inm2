@@ -181,7 +181,8 @@ class ControlePrixRevient(models.Model):
         else:
             self.marge_reelle_pourcentage = Decimal("0")
 
-        # RG36 : qualification selon la fourchette du produit catalogue.
+        # RG36 : qualification selon la fourchette du produit catalogue
+        # (marge_min / marge_max) — seule source de vérité pour le résultat.
         produit_catalogue = devis.produit_catalogue
         if produit_catalogue is not None:
             marge_min = produit_catalogue.marge_min
@@ -198,10 +199,10 @@ class ControlePrixRevient(models.Model):
         else:
             self.resultat = self.Resultat.DANS_LA_NORME
 
-        self.ecart_significatif = (
-            abs(self.marge_reelle_pourcentage - self.marge_cible_pourcentage)
-            >= self.SEUIL_ECART_SIGNIFICATIF
-        )
+        # Écart significatif dérivé directement du résultat (hors fourchette
+        # produit). On évite ainsi deux seuils indépendants et potentiellement
+        # contradictoires (marge_cible_pourcentage vs marge_min/marge_max).
+        self.ecart_significatif = self.resultat != self.Resultat.DANS_LA_NORME
 
     def save(self, *args, **kwargs):
         self.full_clean()

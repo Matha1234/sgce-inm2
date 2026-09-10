@@ -127,27 +127,34 @@ class DevisCreateView(generics.CreateAPIView):
             }
             devis.generer_lignes_devis(remarques)
 
-        from apps.ia.ml.estimation_service import predire_cout
-        from apps.ia.ml.inflation_service import projeter_devis_pluriannuel
-        from apps.ia.models import EstimationIA
+        # Estimation IA legacy (type_document / quantite / atelier) : uniquement
+        # pour les devis hors catalogue. Quand un produit_catalogue est présent,
+        # le prix de revient déterministe (composant par composant) fait déjà
+        # autorité — appeler predire_cout produirait une valeur divergente et
+        # non liée à la nomenclature réelle (cf. clarification STI / UC-02).
+        if not produit_catalogue:
+            from apps.ia.ml.estimation_service import predire_cout
+            from apps.ia.models import EstimationIA
 
-        resultat = predire_cout(
-            type_document=devis.commande.type_document,
-            quantite=devis.commande.quantite,
-            atelier=devis.commande.atelier,
-        )
-        EstimationIA.objects.update_or_create(
-            devis=devis,
-            defaults={
-                "prix_predit": resultat["prix_predit"],
-                "duree_predite": resultat["duree_predite"],
-                "version_modele": resultat["version_modele"],
-            },
-        )
+            resultat = predire_cout(
+                type_document=devis.commande.type_document,
+                quantite=devis.commande.quantite,
+                atelier=devis.commande.atelier,
+            )
+            EstimationIA.objects.update_or_create(
+                devis=devis,
+                defaults={
+                    "prix_predit": resultat["prix_predit"],
+                    "duree_predite": resultat["duree_predite"],
+                    "version_modele": resultat["version_modele"],
+                },
+            )
 
         if devis.pluriannuel and devis.duree_contrat_annees:
+            from apps.ia.ml.inflation_service import projeter_devis_pluriannuel
+
             projection = projeter_devis_pluriannuel(
-                prix_revient_actuel=devis.prix_vente,
+                prix_vente_actuel=devis.prix_vente,
                 duree_annees=devis.duree_contrat_annees,
                 taux_inflation_pct=devis.taux_inflation_projete,  # None -> calcule automatiquement
             )
@@ -218,8 +225,9 @@ class AtelierListView(generics.ListAPIView):
 
 class DossierFabricationListCreateView(generics.ListCreateAPIView):
     """
-    Liste des dossiers de fabrication. Un Chef d'atelier ne voit que les
-    dossiers de l'atelier qu'il dirige. Creation reservee a l'Agent SDO.
+    Liste des dossiers de fabrication (SPA et SPB).
+    Tout Chef d'atelier voit et gère les deux ateliers.
+    Creation reservee a l'Agent SDO (validation devis).
     """
 
     queryset = DossierFabrication.objects.select_related("commande", "atelier").prefetch_related("etapes")
@@ -230,37 +238,20 @@ class DossierFabricationListCreateView(generics.ListCreateAPIView):
             return [IsAgentSDO()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if getattr(user, "role", None) == "CHEF_ATELIER":
-            qs = qs.filter(atelier__chef_atelier=user)
-        return qs
-
 
 class DossierFabricationDetailView(generics.RetrieveUpdateAPIView):
-    """Seul le Chef d'atelier de l'atelier concerne (ou l'Admin) peut modifier le statut (RG17)."""
+    """Tout Chef d'atelier (SPA/SPB) ou Admin peut modifier le statut (RG17 élargi)."""
 
     queryset = DossierFabrication.objects.select_related("commande", "atelier").prefetch_related("etapes")
     serializer_class = DossierFabricationSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if getattr(user, "role", None) == "CHEF_ATELIER":
-            qs = qs.filter(atelier__chef_atelier=user)
-        return qs
-
     def perform_update(self, serializer):
-        dossier = self.get_object()
         user = self.request.user
-        est_admin = getattr(user, "role", None) == "ADMIN"
-        est_chef_du_bon_atelier = dossier.atelier.chef_atelier_id == user.id
-
-        if not (est_admin or est_chef_du_bon_atelier):
+        role = getattr(user, "role", None)
+        if role not in ("ADMIN", "CHEF_ATELIER"):
             raise PermissionDenied(
-                "Seul le chef de cet atelier (ou l'Administrateur) peut modifier ce dossier (RG17)."
+                "Seul un Chef d'atelier ou l'Administrateur peut modifier ce dossier (RG17)."
             )
         serializer.save()
 
@@ -285,22 +276,12 @@ class EtapeProductionListCreateView(generics.ListCreateAPIView):
             return [IsChefAtelier()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
-        if getattr(user, "role", None) == "CHEF_ATELIER":
-            qs = qs.filter(dossier__atelier__chef_atelier=user)
-        return qs
-
     def perform_create(self, serializer):
-        dossier = serializer.validated_data.get("dossier")
         user = self.request.user
-        est_admin = getattr(user, "role", None) == "ADMIN"
-        est_chef_du_bon_atelier = dossier and dossier.atelier.chef_atelier_id == user.id
-
-        if not (est_admin or est_chef_du_bon_atelier):
+        role = getattr(user, "role", None)
+        if role not in ("ADMIN", "CHEF_ATELIER"):
             raise PermissionDenied(
-                "Seul le chef de l'atelier concerné (ou l'Administrateur) peut ajouter une étape à ce dossier (RG17)."
+                "Seul un Chef d'atelier ou l'Administrateur peut ajouter une étape (RG17)."
             )
         serializer.save()
 
@@ -318,14 +299,11 @@ class EtapeProductionDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def perform_update(self, serializer):
-        etape = self.get_object()
         user = self.request.user
-        est_admin = getattr(user, "role", None) == "ADMIN"
-        est_chef_du_bon_atelier = etape.dossier.atelier.chef_atelier_id == user.id
-
-        if not (est_admin or est_chef_du_bon_atelier):
+        role = getattr(user, "role", None)
+        if role not in ("ADMIN", "CHEF_ATELIER"):
             raise PermissionDenied(
-                "Seul le chef de l'atelier concerné (ou l'Administrateur) peut modifier cette étape (RG17)."
+                "Seul un Chef d'atelier ou l'Administrateur peut modifier cette étape (RG17)."
             )
         serializer.save()
 
@@ -358,7 +336,8 @@ class MouvementStockListCreateView(generics.ListCreateAPIView):
     """
     Liste et creation des mouvements de stock - reservees au Magasinier
     (et Admin). La verification de disponibilite (RG11) est faite dans le
-    serializer, avec une seconde protection atomique au niveau du modele.
+    modele (atomique) ; une ValidationError Django est convertie en erreur
+    DRF 400 pour que le frontend reçoive un message clair au lieu d'un 500.
     """
 
     queryset = MouvementStock.objects.select_related("article", "dossier").all()
@@ -366,7 +345,18 @@ class MouvementStockListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsMagasinier]
 
     def perform_create(self, serializer):
-        serializer.save(valide_par=self.request.user)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
+        try:
+            serializer.save(valide_par=self.request.user)
+        except DjangoValidationError as exc:
+            # RG11 : stock disponible insuffisant, ou autre contrainte métier
+            # levée dans MouvementStock.save() / full_clean().
+            if hasattr(exc, "message_dict"):
+                raise DRFValidationError(exc.message_dict)
+            messages = getattr(exc, "messages", None) or [str(exc)]
+            raise DRFValidationError({"detail": messages})
 
 
 # ------------------------------------------------------------------
@@ -549,8 +539,6 @@ class ExecutionOperationListCreateView(generics.ListCreateAPIView):
         dossier_id = self.request.query_params.get("dossier")
         if dossier_id:
             queryset = queryset.filter(dossier_id=dossier_id)
-        if getattr(self.request.user, "role", None) == "CHEF_ATELIER":
-            queryset = queryset.filter(dossier__atelier__chef_atelier=self.request.user)
         return queryset
 
     def get_permissions(self):
@@ -559,19 +547,14 @@ class ExecutionOperationListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        execution = serializer.validated_data["dossier"]
-        user = self.request.user
-        if getattr(user, "role", None) != "ADMIN" and execution.atelier.chef_atelier_id != user.id:
-            raise PermissionDenied(
-                "Vous ne pouvez saisir une exécution que pour votre atelier (RG17)."
-            )
-        serializer.save(utilisateur=user)
+        # Tout Chef d'atelier peut saisir sur SPA et SPB.
+        serializer.save(utilisateur=self.request.user)
 
 
 class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
     """
     Consultation et mise a jour d'une execution d'operation.
-    Modification reservee au Chef d'atelier (ou l'Administrateur).
+    Modification reservee a tout Chef d'atelier (SPA/SPB) ou a l'Administrateur.
     """
 
     queryset = ExecutionOperation.objects.select_related(
@@ -580,22 +563,12 @@ class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = ExecutionOperationSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        if getattr(self.request.user, "role", None) == "CHEF_ATELIER":
-            qs = qs.filter(dossier__atelier__chef_atelier=self.request.user)
-        return qs
-
     def perform_update(self, serializer):
-        execution = self.get_object()
         user = self.request.user
-        est_admin = getattr(user, "role", None) == "ADMIN"
-        est_chef_du_bon_atelier = (
-            execution.dossier.atelier.chef_atelier_id == user.id
-        )
-        if not (est_admin or est_chef_du_bon_atelier):
+        role = getattr(user, "role", None)
+        if role not in ("ADMIN", "CHEF_ATELIER"):
             raise PermissionDenied(
-                "Seul le chef de l'atelier concerné (ou l'Administrateur) "
-                "peut modifier cette saisie (RG17)."
+                "Seul un Chef d'atelier ou l'Administrateur peut modifier cette saisie (RG17)."
             )
         serializer.save()
+

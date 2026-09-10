@@ -49,9 +49,15 @@ export default function App() {
             <Route path="/stock" element={<StockPage />} />
           </Route>
 
+          {/* Agent SDO : consulte le contrôle du prix de revient (UC-06 / tableau acteurs).
+              Admin : accès complet (passe toujours via ProtectedRoute). */}
+          <Route element={<ProtectedRoute rolesAutorises={["AGENT_SDO"]} />}>
+            <Route path="/rentabilite" element={<ControlesListPage />} />
+          </Route>
+
+          {/* Admin uniquement : comptes utilisateurs et catalogue (référentiel). */}
           <Route element={<ProtectedRoute rolesAutorises={[]} />}>
             <Route path="/utilisateurs" element={<UtilisateursPage />} />
-            <Route path="/rentabilite" element={<ControlesListPage />} />
             <Route path="/catalogue" element={<CataloguePage />} />
           </Route>
         </Route>

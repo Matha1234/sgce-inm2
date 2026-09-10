@@ -99,12 +99,15 @@ def calculer_prix_equilibre_pluriannuel(prix_actuel, duree_annees, taux_inflatio
     return prix_equilibre.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def projeter_devis_pluriannuel(prix_revient_actuel, duree_annees, taux_inflation_pct=None):
+def projeter_devis_pluriannuel(prix_vente_actuel, duree_annees, taux_inflation_pct=None):
     """
-    Point d'entree principal utilise par la creation d'un devis
-    pluriannuel : calcule (si non fourni) le taux d'inflation projete a
-    partir de l'historique, puis le prix de vente unitaire equilibre pour
-    toute la duree du contrat.
+    Point d'entrée principal utilisé par la création d'un devis
+    pluriannuel : calcule (si non fourni) le taux d'inflation projeté à
+    partir de l'historique, puis le prix de vente unitaire équilibré pour
+    toute la durée du contrat.
+
+    `prix_vente_actuel` est le prix de vente de départ (pas le prix de
+    revient) : on projette le prix facturé au client sur la durée du marché.
 
     Retourne un dict {taux_inflation_projete, prix_vente_equilibre, fiable}.
     """
@@ -113,7 +116,7 @@ def projeter_devis_pluriannuel(prix_revient_actuel, duree_annees, taux_inflation
         taux_inflation_pct, fiable = calculer_taux_inflation_historique()
 
     prix_equilibre = calculer_prix_equilibre_pluriannuel(
-        prix_revient_actuel, duree_annees, taux_inflation_pct
+        prix_vente_actuel, duree_annees, taux_inflation_pct
     )
 
     return {

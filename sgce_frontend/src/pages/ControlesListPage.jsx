@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
 import {
   Alert, Box, Card, CardContent, Chip, CircularProgress, Grid,
   Paper, Stack, Table, TableBody, TableCell, TableContainer,
@@ -18,6 +19,10 @@ import { useHauteurCinqLignes } from "../utils/tableau";
 import { CarteAnneau, CarteDonutLegende } from "../components/common/CartesTableauBord";
 
 export default function ControlesListPage() {
+  const { utilisateur } = useSelector((state) => state.auth);
+  const estAdmin = utilisateur?.role === "ADMIN";
+  // Agent SDO : consultation des fiches de contrôle (UC-06).
+  // Admin : + indicateurs agrégés du tableau de bord Direction.
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
   const [controles, setControles] = useState([]);
@@ -28,12 +33,19 @@ export default function ControlesListPage() {
       setChargement(true);
       setErreur("");
       try {
-        const [listeControles, tableauBord] = await Promise.all([
-          listerControles(),
-          recupererTableauBordRentabilite(),
-        ]);
+        const listeControles = await listerControles();
         setControles(Array.isArray(listeControles) ? listeControles : listeControles.results || []);
-        setIndicateurs(tableauBord);
+        if (estAdmin) {
+          try {
+            const tableauBord = await recupererTableauBordRentabilite();
+            setIndicateurs(tableauBord);
+          } catch {
+            // Les indicateurs Direction restent optionnels si l'API échoue.
+            setIndicateurs(null);
+          }
+        } else {
+          setIndicateurs(null);
+        }
       } catch {
         setErreur("Impossible de charger les données de rentabilité.");
       } finally {
@@ -41,7 +53,7 @@ export default function ControlesListPage() {
       }
     }
     charger();
-  }, []);
+  }, [estAdmin]);
 
   // Tri des fiches de contrôle par colonne (croissant puis décroissant)
   const { cleTri, directionTri, gererTri, donneesTriees: controlesTries } = useTriTableau(controles);

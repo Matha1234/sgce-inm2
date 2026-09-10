@@ -620,4 +620,23 @@ class MouvementStockSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"dossier": "Une sortie physique doit être rattachée à un dossier de fabrication."}
             )
+
+        # Pré-contrôle RG11 (disponible) pour renvoyer une 400 claire avant
+        # le verrou atomique du modèle. La vérification définitive reste dans
+        # MouvementStock.save() (select_for_update).
+        article = attrs.get("article")
+        if article is not None and type_mouvement in (
+            MouvementStock.TypeMouvement.SORTIE,
+            MouvementStock.TypeMouvement.RESERVATION,
+        ):
+            disponible = article.quantite_stock - article.quantite_reservee
+            if disponible < quantite:
+                raise serializers.ValidationError({
+                    "quantite": (
+                        f"Quantité disponible insuffisante (RG11) : "
+                        f"{disponible} {article.unite} disponible(s), "
+                        f"{quantite} demandé(s)."
+                    )
+                })
+
         return attrs

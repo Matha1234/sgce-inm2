@@ -1,19 +1,22 @@
 from django.db.models import Avg
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.utilisateurs.permissions import IsAdmin, IsChefAtelier
+from apps.utilisateurs.permissions import IsAdmin, IsChefAtelier, IsRole
 
 from .models import ControlePrixRevient
 from .serializers import ControlePrixRevientSerializer, TableauBordRentabiliteSerializer
+
+# Consultation des contrôles : Agent SDO (clôture / suivi), Chef d'atelier, Admin.
+# Création : Chef d'atelier (+ Admin) uniquement (PR-08).
+IsConsultControle = IsRole.for_roles("ADMIN", "AGENT_SDO", "CHEF_ATELIER")
 
 
 class ControlePrixRevientListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/controles/            -> liste des fiches de contrôle
-    GET  /api/controles/?dossier=ID -> fiche(s) d'un dossier donné (0 ou 1)
+    GET  /api/controles/?dossier=ID -> fiche(s) d'un dossier donné
     POST /api/controles/            -> création, réservée au Chef d'atelier (et à l'Admin) (PR-08)
     """
 
@@ -27,12 +30,13 @@ class ControlePrixRevientListCreateView(generics.ListCreateAPIView):
         dossier_id = self.request.query_params.get("dossier")
         if dossier_id:
             queryset = queryset.filter(dossier_id=dossier_id)
+        # Tout Chef d'atelier voit les contrôles SPA et SPB.
         return queryset
 
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsChefAtelier()]
-        return [IsAuthenticated()]
+        return [IsConsultControle()]
 
     def perform_create(self, serializer):
         serializer.save(controle_par=self.request.user)
@@ -41,12 +45,14 @@ class ControlePrixRevientListCreateView(generics.ListCreateAPIView):
 class ControlePrixRevientDetailView(generics.RetrieveAPIView):
     """Consultation d'une fiche de contrôle du prix de revient. Non modifiable après création."""
 
-    queryset = ControlePrixRevient.objects.select_related(
-        "dossier", "dossier__atelier", "dossier__commande",
-        "dossier__commande__devis", "composant", "ligne_devis",
-    ).all()
     serializer_class = ControlePrixRevientSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsConsultControle]
+
+    def get_queryset(self):
+        return ControlePrixRevient.objects.select_related(
+            "dossier", "dossier__atelier", "dossier__commande",
+            "dossier__commande__devis", "composant", "ligne_devis",
+        ).all()
 
 
 class TableauBordRentabiliteView(APIView):

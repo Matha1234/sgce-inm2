@@ -37,8 +37,8 @@ const LIBELLES_PAPIER = {
   OFFSET: "Offset", DOSSIER: "Dossier", AUTOCOPIANT: "Autocopiant", NON_APPLICABLE: "Non applicable",
 };
 
-const LIBELLES_MOUVEMENT = { ENTREE: "Entrée", SORTIE: "Sortie" };
-const COULEURS_MOUVEMENT = { ENTREE: "success", SORTIE: "warning" };
+const LIBELLES_MOUVEMENT = { ENTREE: "Entrée", SORTIE: "Sortie", RESERVATION: "Réservation" };
+const COULEURS_MOUVEMENT = { ENTREE: "success", SORTIE: "warning", RESERVATION: "info" };
 
 const ARTICLE_VIDE = {
   designation: "", emplacement_stock: "", classe_comptable: "CLASSE_6", type_papier: "NON_APPLICABLE",
@@ -124,7 +124,7 @@ export default function StockPage() {
   const refCadreMouvements = useRef(null);
   const hauteurCadreMouvements = useHauteurCinqLignes(refCadreMouvements, mouvementsPaginees.length);
 
-  const articlesEnAlerte = articles.filter((a) => a.est_en_alerte ?? (Number(a.quantite_stock) <= Number(a.seuil_securite)));
+  const articlesEnAlerte = articles.filter((a) => a.est_en_alerte ?? ((Number(a.quantite_disponible ?? (Number(a.quantite_stock) - Number(a.quantite_reservee || 0))) <= Number(a.seuil_securite))));
 
   const gererRecherche = (valeur) => { setRecherche(valeur); setPage(0); };
 
@@ -184,24 +184,36 @@ export default function StockPage() {
   const gererMouvement = async () => {
     setConfirmationMouvement(false);
     if (!quantiteMouvement || Number(quantiteMouvement) <= 0) return;
+    // RG8 / serializer : une SORTIE doit être rattachée à un dossier.
+    if (typeMouvement === "SORTIE" && !dossierMouvementId) {
+      setErreur("Une sortie physique doit être rattachée à un dossier de fabrication.");
+      return;
+    }
     setEnCoursMouvement(true);
     setErreur("");
     try {
-      await creerMouvement({
-        article: articleSelectionne.id, type_mouvement: typeMouvement,
+      const payload = {
+        article: articleSelectionne.id,
+        type_mouvement: typeMouvement,
         quantite: Number(quantiteMouvement),
-        dossier: typeMouvement === "SORTIE" && dossierMouvementId ? dossierMouvementId : null,
-      });
+      };
+      if (typeMouvement === "SORTIE" || typeMouvement === "RESERVATION") {
+        if (dossierMouvementId) payload.dossier = Number(dossierMouvementId);
+      }
+      await creerMouvement(payload);
+      const lib = LIBELLES_MOUVEMENT[typeMouvement] || typeMouvement;
       afficherSucces(
-        typeMouvement === "ENTREE"
-          ? `Entrée de ${quantiteMouvement} ${articleSelectionne.unite} enregistrée avec succès.`
-          : `Sortie de ${quantiteMouvement} ${articleSelectionne.unite} enregistrée avec succès.`
+        `${lib} de ${quantiteMouvement} ${articleSelectionne.unite} enregistrée avec succès.`
       );
       setDialogueMouvementOuvert(false);
       charger();
     } catch (err) {
       const donnees = err.response?.data;
-      if (donnees?.quantite) setErreur(Array.isArray(donnees.quantite) ? donnees.quantite[0] : donnees.quantite);
+      const extraire = (v) => (Array.isArray(v) ? v[0] : v);
+      if (donnees?.quantite) setErreur(extraire(donnees.quantite));
+      else if (donnees?.dossier) setErreur(extraire(donnees.dossier));
+      else if (donnees?.detail) setErreur(extraire(donnees.detail));
+      else if (typeof donnees === "string") setErreur(donnees);
       else setErreur("Impossible d'enregistrer ce mouvement.");
     } finally { setEnCoursMouvement(false); }
   };
@@ -320,7 +332,8 @@ export default function StockPage() {
               </TableHead>
               <TableBody>
                 {articlesPaginees.map((article, index) => {
-                  const enAlerte = article.est_en_alerte ?? (Number(article.quantite_stock) <= Number(article.seuil_securite));
+                  const disponible = Number(article.quantite_disponible ?? (Number(article.quantite_stock) - Number(article.quantite_reservee || 0)));
+                  const enAlerte = article.est_en_alerte ?? (disponible <= Number(article.seuil_securite));
                   return (
                     <TableRow key={article.id} hover sx={{
                       "&:last-child td": { borderBottom: 0 },
@@ -350,6 +363,11 @@ export default function StockPage() {
                       <TableCell align="center">{Number(article.cout_unitaire).toLocaleString("fr-FR")} Ar</TableCell>
                       <TableCell align="center" sx={{ fontWeight: 600 }}>
                         {Number(article.quantite_stock).toLocaleString("fr-FR")}
+                        {Number(article.quantite_reservee || 0) > 0 && (
+                          <Typography component="span" variant="caption" color="text.secondary" display="block">
+                            réservé {Number(article.quantite_reservee).toLocaleString("fr-FR")} · dispo {disponible.toLocaleString("fr-FR")}
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="center">{Number(article.seuil_securite).toLocaleString("fr-FR")}</TableCell>
                       <TableCell align="center">
@@ -530,15 +548,18 @@ export default function StockPage() {
             <TextField select label="Type de mouvement" fullWidth value={typeMouvement}
               onChange={(e) => setTypeMouvement(e.target.value)}>
               <MenuItem value="ENTREE">Entrée (approvisionnement)</MenuItem>
+              <MenuItem value="RESERVATION">Réservation (besoin dossier)</MenuItem>
               <MenuItem value="SORTIE">Sortie (consommation production)</MenuItem>
             </TextField>
-            {typeMouvement === "SORTIE" && (
-              <TextField select label="Dossier de fabrication lié (RG8)" value={dossierMouvementId}
-                onChange={(e) => setDossierMouvementId(e.target.value)} fullWidth
-                helperText="Rattache la consommation matière à un dossier.">
-                <MenuItem value="">— Sans dossier —</MenuItem>
+            {(typeMouvement === "SORTIE" || typeMouvement === "RESERVATION") && (
+              <TextField select label="Dossier de fabrication lié" value={dossierMouvementId}
+                onChange={(e) => setDossierMouvementId(e.target.value)} fullWidth required={typeMouvement === "SORTIE"}
+                helperText={typeMouvement === "SORTIE"
+                  ? "Obligatoire pour une sortie (RG8) — rattache la consommation à un dossier."
+                  : "Recommandé : rattache la réservation au dossier de fabrication."}>
+                <MenuItem value="">{typeMouvement === "SORTIE" ? "— Choisir un dossier —" : "— Sans dossier —"}</MenuItem>
                 {dossiers.map((d) => (
-                  <MenuItem key={d.id} value={d.id}>{d.numero_dossier} — {d.commande_numero}</MenuItem>
+                  <MenuItem key={d.id} value={d.id}>{d.numero_dossier} — {d.commande_numero || d.statut_production}</MenuItem>
                 ))}
               </TextField>
             )}
@@ -559,9 +580,13 @@ export default function StockPage() {
       {/* Dialogue : confirmation du mouvement de stock */}
       <ConfirmDialog
         ouvert={confirmationMouvement}
-        titre={typeMouvement === "ENTREE" ? "Enregistrer cette entrée ?" : "Enregistrer cette sortie ?"}
+        titre={
+          typeMouvement === "ENTREE" ? "Enregistrer cette entrée ?"
+            : typeMouvement === "RESERVATION" ? "Enregistrer cette réservation ?"
+            : "Enregistrer cette sortie ?"
+        }
         icone={<SwapVertIcon sx={{ fontSize: 24 }} />}
-        couleur={typeMouvement === "ENTREE" ? "success" : "warning"}
+        couleur={typeMouvement === "ENTREE" ? "success" : typeMouvement === "RESERVATION" ? "info" : "warning"}
         texteConfirmer="Enregistrer"
         enCours={enCoursMouvement}
         onConfirmer={gererMouvement}
@@ -569,6 +594,8 @@ export default function StockPage() {
         message={
           typeMouvement === "ENTREE"
             ? `Ajouter ${quantiteMouvement || "…"} ${articleSelectionne?.unite} au stock de « ${articleSelectionne?.designation} » ? Un mouvement est définitif et tracé (RG8-RG11).`
+            : typeMouvement === "RESERVATION"
+            ? `Réserver ${quantiteMouvement || "…"} ${articleSelectionne?.unite} de « ${articleSelectionne?.designation} » (diminue la quantité disponible, pas le stock physique) ?`
             : `Retirer ${quantiteMouvement || "…"} ${articleSelectionne?.unite} du stock de « ${articleSelectionne?.designation} » ? Un mouvement est définitif et tracé (RG8-RG11).`
         }
       />

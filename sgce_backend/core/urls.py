@@ -18,7 +18,7 @@ def racine(_request):
     """Point d'entrée HTTP : l'API n'a pas de page d'accueil HTML."""
     return JsonResponse(
         {
-            "service": "SGCFC INM API",
+            "service": "SGCFC-INM API",
             "admin": "/admin/",
             "documentation": "/api/docs/",
             "login": "/api/auth/login/",

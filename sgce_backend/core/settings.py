@@ -26,7 +26,7 @@ INSTALLED_APPS = [
     'apps.utilisateurs',
     'apps.facturation',
     'apps.ia',
-    'apps.notifications',
+    'apps.notifications.apps.NotificationsConfig',
     'apps.controle',
     'apps.messagerie',
 ]
@@ -132,12 +132,15 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 # ── API Documentation ─────────────────────────────────────────────────────
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'SGCFC INM API',
+    'TITLE': 'SGCFC-INM API',
     'DESCRIPTION': 'Système de Gestion des Coûts, de la Fabrication et du Contrôle du Prix de Revient — Imprimerie Nationale de Madagascar',
     'VERSION': '1.0.0',
 }

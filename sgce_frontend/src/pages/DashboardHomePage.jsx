@@ -120,10 +120,16 @@ export default function DashboardHomePage() {
   const [composantsAReviser, setComposantsAReviser] = useState([]);
   const [derniereMiseAJour, setDerniereMiseAJour] = useState(null);
   const [onglet, setOnglet] = useState("synthese");
+  // Aligné sur le tableau des acteurs (Chapitre 5) :
+  // Agent SDO : commandes + consultation production/rentabilité
+  // Chef atelier : production de son atelier
+  // Magasinier : stock
+  // Admin : tout
   const peutCommandes = role === "ADMIN" || role === "AGENT_SDO";
-  const peutProduction = role === "ADMIN" || role === "CHEF_ATELIER";
+  const peutProduction = role === "ADMIN" || role === "CHEF_ATELIER" || role === "AGENT_SDO";
   const peutStock = role === "ADMIN" || role === "MAGASINIER";
-  const peutRentabilite = role === "ADMIN";
+  const peutRentabilite = role === "ADMIN" || role === "AGENT_SDO";
+  const peutTableauBordAdmin = role === "ADMIN";
   const charger = useCallback(async (refresh = false) => {
     if (!role) return;
     refresh ? setActualisation(true) : setChargement(true);
@@ -138,7 +144,9 @@ export default function DashboardHomePage() {
       }
       if (peutStock)
         taches.push(listerArticles().then(d => setArticles(normaliser(d))));
-      if (peutRentabilite) {
+      // Tableau de bord agrégé + composants à réviser : Admin uniquement (API IsAdmin).
+      // Agent SDO consulte la rentabilité via la page /rentabilite (liste des contrôles).
+      if (peutTableauBordAdmin) {
         taches.push(recupererTableauBordRentabilite().then(setRentabilite));
         taches.push(listerComposantsAReviser().then(setComposantsAReviser));
       }
@@ -150,7 +158,7 @@ export default function DashboardHomePage() {
       setChargement(false);
       setActualisation(false);
     }
-  }, [role, peutCommandes, peutProduction, peutStock, peutRentabilite]);
+  }, [role, peutCommandes, peutProduction, peutStock, peutTableauBordAdmin]);
   useEffect(() => { charger(); }, [charger]);
   const commandesParStatut = useMemo(() =>
     Object.entries(LIBELLES_STATUT_COMMANDE).map(([code, statut]) => ({
