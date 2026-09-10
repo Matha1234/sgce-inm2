@@ -37,3 +37,7 @@ export const estimerPrixRevientCatalogue = (produitId, quantite) =>
   axiosClient
     .post("/catalogue/estimer/", { produit: produitId, quantite })
     .then((r) => r.data);
+
+// --- Révision des standards (RG37) — boucle de rétroaction, réservé Admin ---
+export const listerComposantsAReviser = () =>
+  axiosClient.get("/catalogue/composants-a-reviser/").then((r) => r.data);

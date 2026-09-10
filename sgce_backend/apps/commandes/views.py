@@ -50,6 +50,10 @@ class CommandeListCreateView(generics.ListCreateAPIView):
     """
     Liste des commandes : accessible a tout utilisateur authentifie.
     Creation : reservee a l'Agent SDO (et l'Administrateur).
+
+    GET ?organisme=<id> - historique des commandes (et de leur devis, imbrique
+    dans CommandeSerializer) d'un organisme client donne (UC-14 : « consulter
+    l'historique des commandes et devis d'un client »), auparavant absent.
     """
 
     queryset = Commande.objects.select_related("organisme", "devis").all()
@@ -60,16 +64,27 @@ class CommandeListCreateView(generics.ListCreateAPIView):
             return [IsAgentSDO()]
         return [IsAuthenticated()]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        organisme_id = self.request.query_params.get("organisme")
+        if organisme_id:
+            queryset = queryset.filter(organisme_id=organisme_id)
+        return queryset
+
     def perform_create(self, serializer):
         serializer.save(cree_par=self.request.user)
 
 
 class CommandeDetailView(generics.RetrieveUpdateAPIView):
-    """Consultation et mise a jour d'une commande donnee."""
+    """Consultation d'une commande ; modification reservee a l'Agent SDO/Admin."""
 
     queryset = Commande.objects.select_related("organisme", "devis").all()
     serializer_class = CommandeSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in {"PUT", "PATCH"}:
+            return [IsAgentSDO()]
+        return [IsAuthenticated()]
 
 
 class DevisCreateView(generics.CreateAPIView):
@@ -144,7 +159,13 @@ class DevisCreateView(generics.CreateAPIView):
 class DevisDetailView(generics.RetrieveUpdateAPIView):
     """
     Consultation et validation d'un devis - reservee a l'Agent SDO (RG16).
-    La validation fait passer la commande associee au statut VALIDEE (RG5).
+    La validation fait passer la commande associee au statut VALIDEE (RG5)
+    et declenche automatiquement la generation du dossier de fabrication
+    (RG4, RG5, RG8, RG34 - UC-03, memoire section 5.10.4).
+
+    Correctif (UC-13, tableau des acteurs : « modifie un devis tant qu'il
+    n'est pas validé ») : un devis déjà validé ne peut plus être modifié -
+    cette contrainte n'était pas encore appliquée côté vue.
     """
 
     queryset = Devis.objects.select_related("commande").all()
@@ -152,12 +173,35 @@ class DevisDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAgentSDO]
 
     def perform_update(self, serializer):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.db import transaction
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         devis = serializer.save()
         if devis.valide:
-            if not devis.valide_par:
-                devis.valide_par = self.request.user
-                devis.save(update_fields=["valide_par"])
-            Commande.objects.filter(pk=devis.commande_id).update(statut=Commande.Statut.VALIDEE)
+            try:
+                with transaction.atomic():
+                    if not devis.valide_par:
+                        devis.valide_par = self.request.user
+                        devis.save(update_fields=["valide_par"])
+                    Commande.objects.filter(pk=devis.commande_id).update(
+                        statut=Commande.Statut.VALIDEE
+                    )
+
+                    # RG4/RG5/RG8/RG34 (UC-03) : génération automatique du
+                    # dossier de fabrication à la validation, sans action
+                    # manuelle supplémentaire de l'Agent SDO. Regroupée dans
+                    # la même transaction que la mise à jour du statut de la
+                    # commande : un échec (ex. aucun atelier de référence
+                    # configuré) annule les deux plutôt que de laisser la
+                    # commande passer VALIDEE sans dossier associé.
+                    from .services import generer_dossier_fabrication
+
+                    generer_dossier_fabrication(devis)
+            except DjangoValidationError as exc:
+                raise DRFValidationError(
+                    {"dossier_fabrication": getattr(exc, "messages", [str(exc)])}
+                )
 
 
 # ------------------------------------------------------------------
@@ -200,6 +244,13 @@ class DossierFabricationDetailView(generics.RetrieveUpdateAPIView):
     queryset = DossierFabrication.objects.select_related("commande", "atelier").prefetch_related("etapes")
     serializer_class = DossierFabricationSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if getattr(user, "role", None) == "CHEF_ATELIER":
+            qs = qs.filter(atelier__chef_atelier=user)
+        return qs
 
     def perform_update(self, serializer):
         dossier = self.get_object()
@@ -332,10 +383,47 @@ class OptionDevisListCreateView(generics.ListCreateAPIView):
     queryset = OptionDevis.objects.select_related("devis").all()
     serializer_class = OptionDevisSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        devis_id = self.request.query_params.get("devis")
+        if devis_id:
+            queryset = queryset.filter(devis_id=devis_id)
+        return queryset
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAgentSDO()]
         return [IsAuthenticated()]
+
+
+class OptionDevisDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Consultation, modification et suppression d'une option de devis.
+    Corrige une absence : seule la creation etait exposee jusqu'ici, alors
+    que l'Agent SDO doit pouvoir ajuster ou retirer une personnalisation
+    tant que le devis n'est pas valide (UC-13, RG16).
+    """
+
+    queryset = OptionDevis.objects.select_related("devis").all()
+    serializer_class = OptionDevisSerializer
+    permission_classes = [IsAgentSDO]
+
+    def perform_update(self, serializer):
+        self._verifier_devis_modifiable(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._verifier_devis_modifiable(instance)
+        devis = instance.devis
+        instance.delete()
+        devis.recalculer_et_sauvegarder_prix_revient()
+
+    @staticmethod
+    def _verifier_devis_modifiable(option):
+        if option.devis.valide:
+            raise PermissionDenied(
+                "Un devis déjà validé ne peut plus être modifié (RG16, UC-13)."
+            )
 
 
 class LigneMatiereDevisListCreateView(generics.ListCreateAPIView):
@@ -348,10 +436,47 @@ class LigneMatiereDevisListCreateView(generics.ListCreateAPIView):
     queryset = LigneMatiereDevis.objects.select_related("article", "ligne_devis").all()
     serializer_class = LigneMatiereDevisSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        ligne_devis_id = self.request.query_params.get("ligne_devis")
+        if ligne_devis_id:
+            queryset = queryset.filter(ligne_devis_id=ligne_devis_id)
+        return queryset
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAgentSDO()]
         return [IsAuthenticated()]
+
+
+class LigneMatiereDevisDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Consultation, ajustement et suppression d'une ligne matière du devis
+    (RG39). Corrige une absence : seule la création était exposée, alors
+    que l'Agent SDO doit pouvoir ajuster la quantité estimée (ex. suite à
+    une option) tant que le devis n'est pas validé (UC-13, RG16).
+    """
+
+    queryset = LigneMatiereDevis.objects.select_related("article", "ligne_devis__devis").all()
+    serializer_class = LigneMatiereDevisSerializer
+    permission_classes = [IsAgentSDO]
+
+    def perform_update(self, serializer):
+        self._verifier_devis_modifiable(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._verifier_devis_modifiable(instance)
+        devis = instance.ligne_devis.devis
+        instance.delete()
+        devis.recalculer_et_sauvegarder_prix_revient()
+
+    @staticmethod
+    def _verifier_devis_modifiable(ligne):
+        if ligne.ligne_devis.devis.valide:
+            raise PermissionDenied(
+                "Un devis déjà validé ne peut plus être modifié (RG16, UC-13)."
+            )
 
 
 class LigneOperationDevisListCreateView(generics.ListCreateAPIView):
@@ -364,10 +489,47 @@ class LigneOperationDevisListCreateView(generics.ListCreateAPIView):
     queryset = LigneOperationDevis.objects.select_related("poste", "ligne_devis").all()
     serializer_class = LigneOperationDevisSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        ligne_devis_id = self.request.query_params.get("ligne_devis")
+        if ligne_devis_id:
+            queryset = queryset.filter(ligne_devis_id=ligne_devis_id)
+        return queryset
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsAgentSDO()]
         return [IsAuthenticated()]
+
+
+class LigneOperationDevisDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Consultation, ajustement et suppression d'une ligne opération du devis
+    (RG39). Corrige une absence : seule la création était exposée, alors
+    que l'Agent SDO doit pouvoir ajuster le temps estimé tant que le devis
+    n'est pas validé (UC-13, RG16).
+    """
+
+    queryset = LigneOperationDevis.objects.select_related("poste", "ligne_devis__devis").all()
+    serializer_class = LigneOperationDevisSerializer
+    permission_classes = [IsAgentSDO]
+
+    def perform_update(self, serializer):
+        self._verifier_devis_modifiable(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._verifier_devis_modifiable(instance)
+        devis = instance.ligne_devis.devis
+        instance.delete()
+        devis.recalculer_et_sauvegarder_prix_revient()
+
+    @staticmethod
+    def _verifier_devis_modifiable(ligne):
+        if ligne.ligne_devis.devis.valide:
+            raise PermissionDenied(
+                "Un devis déjà validé ne peut plus être modifié (RG16, UC-13)."
+            )
 
 
 class ExecutionOperationListCreateView(generics.ListCreateAPIView):
@@ -382,13 +544,28 @@ class ExecutionOperationListCreateView(generics.ListCreateAPIView):
     ).all()
     serializer_class = ExecutionOperationSerializer
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        dossier_id = self.request.query_params.get("dossier")
+        if dossier_id:
+            queryset = queryset.filter(dossier_id=dossier_id)
+        if getattr(self.request.user, "role", None) == "CHEF_ATELIER":
+            queryset = queryset.filter(dossier__atelier__chef_atelier=self.request.user)
+        return queryset
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [IsChefAtelier()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        serializer.save(utilisateur=self.request.user)
+        execution = serializer.validated_data["dossier"]
+        user = self.request.user
+        if getattr(user, "role", None) != "ADMIN" and execution.atelier.chef_atelier_id != user.id:
+            raise PermissionDenied(
+                "Vous ne pouvez saisir une exécution que pour votre atelier (RG17)."
+            )
+        serializer.save(utilisateur=user)
 
 
 class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
@@ -402,6 +579,12 @@ class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
     ).all()
     serializer_class = ExecutionOperationSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if getattr(self.request.user, "role", None) == "CHEF_ATELIER":
+            qs = qs.filter(dossier__atelier__chef_atelier=self.request.user)
+        return qs
 
     def perform_update(self, serializer):
         execution = self.get_object()

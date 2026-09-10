@@ -224,6 +224,7 @@ export default function UtilisateursPage() {
                 e.colonne("Email", "email", "left"),
                 e.colonnePerso("R\u00f4le", (u) => LIBELLES_ROLES[u.role] || u.role),
                 e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "D\u00e9sactiv\u00e9"),
+                e.colonnePerso("Membre depuis", (u) => u.date_joined ? new Date(u.date_joined).toLocaleDateString("fr-FR") : ""),
               ],
               lignes: utilisateursEnrichis,
             });
@@ -242,6 +243,7 @@ export default function UtilisateursPage() {
                   e.colonne("Email", "email", "left"),
                   e.colonnePerso("R\u00f4le", (u) => LIBELLES_ROLES[u.role] || u.role),
                   e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "D\u00e9sactiv\u00e9"),
+                  e.colonnePerso("Membre depuis", (u) => u.date_joined ? new Date(u.date_joined).toLocaleDateString("fr-FR") : ""),
                 ],
                 lignes: utilisateursEnrichis,
               }],
@@ -269,6 +271,7 @@ export default function UtilisateursPage() {
                   <EnTeteTriable cle="email" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Email</EnTeteTriable>
                   <EnTeteTriable cle="role" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Rôle</EnTeteTriable>
                   <EnTeteTriable cle="is_active" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Statut</EnTeteTriable>
+                  <EnTeteTriable cle="date_joined" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Membre depuis</EnTeteTriable>
                   <TableCell align="center" sx={STYLE_EN_TETE}>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -325,6 +328,9 @@ export default function UtilisateursPage() {
                           color={u.is_active ? "success" : "default"} size="small" sx={{ fontWeight: 600 }} />
                       </TableCell>
                       <TableCell align="center">
+                        {u.date_joined ? new Date(u.date_joined).toLocaleDateString("fr-FR") : "—"}
+                      </TableCell>
+                      <TableCell align="center">
                         <Stack direction="row" spacing={0.5} justifyContent="center">
                           <Tooltip title="Modifier le compte">
                             <IconButton size="small" onClick={() => ouvrirModification(u)}>
@@ -348,7 +354,7 @@ export default function UtilisateursPage() {
                 })}
                 {utilisateursPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       {recherche ? "Aucun compte ne correspond à votre recherche." : "Aucun compte utilisateur."}
                     </TableCell>
                   </TableRow>

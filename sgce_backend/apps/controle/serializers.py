@@ -21,6 +21,9 @@ class ControlePrixRevientSerializer(serializers.ModelSerializer):
     cout_estime_comparaison = serializers.SerializerMethodField(
         help_text="Prévisionnel comparé : LigneDevis du composant (RG28) ou prix de revient du devis."
     )
+    # RG9/RG10-like traçabilité : controle_par n'était exposé que comme
+    # identifiant brut, sans libellé exploitable côté interface.
+    controle_par_nom = serializers.SerializerMethodField()
 
     class Meta:
         model = ControlePrixRevient
@@ -32,12 +35,17 @@ class ControlePrixRevientSerializer(serializers.ModelSerializer):
             "marge_cible_pourcentage", "marge_reelle", "marge_reelle_pourcentage",
             "prix_revient_estime", "prix_vente", "ecart_prix_revient",
             "resultat", "ecart_significatif", "commentaire",
-            "date_controle", "controle_par",
+            "date_controle", "controle_par", "controle_par_nom",
         ]
         read_only_fields = [
             "ligne_devis", "marge_reelle", "marge_reelle_pourcentage", "ecart_prix_revient", "resultat",
             "ecart_significatif", "date_controle", "controle_par",
         ]
+
+    def get_controle_par_nom(self, obj):
+        if not obj.controle_par_id:
+            return None
+        return obj.controle_par.get_full_name() or obj.controle_par.username
 
     def get_cout_estime_comparaison(self, obj):
         if obj.ligne_devis_id:

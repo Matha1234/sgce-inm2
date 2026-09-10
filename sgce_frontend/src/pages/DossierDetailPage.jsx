@@ -14,7 +14,8 @@ import { alpha } from "@mui/material/styles";
 import { useSelector } from "react-redux";
 
 import {
-  creerEtape, modifierDossier, modifierEtape, recupererCommande, recupererDossier,
+  creerEtape, creerExecutionOperation, listerExecutionsOperation, modifierDossier,
+  modifierEtape, recupererCommande, recupererDossier,
 } from "../api/commandesApi";
 import { creerControle, recupererControlesParDossier } from "../api/controleApi";
 import BoutonExport from "../components/common/BoutonExport";
@@ -30,6 +31,12 @@ const COULEURS_STATUT = {
   CREE: "default", A_FAIRE: "default",
   EN_COURS: "warning",
   TERMINE: "success", TERMINEE: "success",
+};
+
+const LIBELLES_STATUT_EXECUTION = {
+  PLANIFIEE: "Planifiée",
+  EN_COURS: "En cours",
+  EXECUTEE: "Exécutée",
 };
 
 function formaterDate(valeur) {
@@ -122,6 +129,28 @@ function ResultatControle({ controle, parComposant }) {
             </Typography>
           </Box>
         </Grid>
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <Box sx={{ p: 2, borderRadius: 1.5, bgcolor: "background.default", border: "1px solid", borderColor: "divider" }}>
+            <Typography variant="caption" color="text.secondary">
+              Écart (réel − prévisionnel)
+            </Typography>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              {formaterMontant(controle.ecart_prix_revient)}
+            </Typography>
+          </Box>
+        </Grid>
+        {!parComposant && (
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <Box sx={{ p: 2, borderRadius: 1.5, bgcolor: "background.default", border: "1px solid", borderColor: "divider" }}>
+              <Typography variant="caption" color="text.secondary">
+                Prix de revient estimé (devis)
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {formaterMontant(controle.prix_revient_estime)}
+              </Typography>
+            </Box>
+          </Grid>
+        )}
       </Grid>
 
       {controle.commentaire && (
@@ -131,6 +160,11 @@ function ResultatControle({ controle, parComposant }) {
           </Typography>
           <Typography variant="body2">{controle.commentaire}</Typography>
         </>
+      )}
+      {controle.controle_par_nom && (
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1 }}>
+          Contrôlé par {controle.controle_par_nom} le {new Date(controle.date_controle).toLocaleDateString("fr-FR")}
+        </Typography>
       )}
     </Box>
   );
@@ -219,6 +253,13 @@ export default function DossierDetailPage() {
   const [erreursControle, setErreursControle] = useState({});
   const [commande, setCommande] = useState(null);
 
+  // RG35, RG38 : exécutions d'opération (temps réel saisi par le Chef
+  // d'atelier) — jusqu'ici sans aucune interface malgré l'API disponible.
+  const [executions, setExecutions] = useState([]);
+  const [chargementExecutions, setChargementExecutions] = useState(false);
+  const [formulaireExecution, setFormulaireExecution] = useState({});
+  const [executionEnCours, setExecutionEnCours] = useState(null);
+
   const charger = () => {
     setChargement(true);
     recupererDossier(id)
@@ -244,9 +285,18 @@ export default function DossierDetailPage() {
       .finally(() => setChargementControle(false));
   };
 
+  const chargerExecutions = () => {
+    setChargementExecutions(true);
+    listerExecutionsOperation(id)
+      .then((d) => setExecutions(Array.isArray(d) ? d : d.results || []))
+      .catch(() => setExecutions([]))
+      .finally(() => setChargementExecutions(false));
+  };
+
   useEffect(() => {
     charger();
     chargerControle();
+    chargerExecutions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -281,6 +331,33 @@ export default function DossierDetailPage() {
       setErreur("Impossible d'ajouter cette étape.");
     } finally {
       setEnCours(false);
+    }
+  };
+
+  // RG35, RG38 : le Chef d'atelier saisit le temps réel d'une opération du
+  // devis, comparée par la suite à l'estimation (temps_estime) au contrôle
+  // du prix de revient (RG28).
+  const gererSaisieExecution = async (ligneOperationDevis) => {
+    const valeurs = formulaireExecution[ligneOperationDevis.id] || {};
+    if (!valeurs.temps_reel) return;
+    setExecutionEnCours(ligneOperationDevis.id);
+    setErreur("");
+    try {
+      await creerExecutionOperation({
+        dossier: dossier.id,
+        ligne_operation_devis: ligneOperationDevis.id,
+        poste: ligneOperationDevis.poste,
+        temps_reel: valeurs.temps_reel,
+        statut: valeurs.statut || "EXECUTEE",
+      });
+      afficherSucces("Temps réel enregistré pour cette opération.");
+      setFormulaireExecution((f) => ({ ...f, [ligneOperationDevis.id]: {} }));
+      chargerExecutions();
+    } catch (err) {
+      const donnees = err.response?.data;
+      setErreur(donnees ? JSON.stringify(donnees) : "Impossible d'enregistrer ce temps réel.");
+    } finally {
+      setExecutionEnCours(null);
     }
   };
 
@@ -352,6 +429,12 @@ export default function DossierDetailPage() {
   const etapes = dossier.etapes || [];
   const etapesTerminees = etapes.filter((e) => e.statut === "TERMINEE").length;
   const progression = etapes.length > 0 ? Math.round((etapesTerminees / etapes.length) * 100) : 0;
+
+  // RG35, RG38 : gamme d'opérations réellement engagée au devis (RG39),
+  // et exécutions déjà saisies pour ce dossier — pour ne proposer la
+  // saisie que sur les opérations pas encore exécutées.
+  const lignesOperationDevis = commande?.devis?.lignes_operation_detail || [];
+  const executionsParLigne = new Map(executions.map((e) => [e.ligne_operation_devis, e]));
   // RG28 : lignes de devis prévisionnelles (une par composant) issues du
   // devis du dossier — elles définissent les contrôles à établir.
   const lignesDevis = commande?.devis?.lignes_devis || [];
@@ -480,6 +563,15 @@ export default function DossierDetailPage() {
                 valeur={`${etapesTerminees} / ${etapes.length} étape${etapes.length > 1 ? "s" : ""}`}
               />
             </Grid>
+            {dossier.date_cloture && (
+              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                <ElementInfo
+                  icone={<EventIcon sx={{ fontSize: 18 }} />}
+                  libelle="Clôturé le"
+                  valeur={formaterDate(dossier.date_cloture)}
+                />
+              </Grid>
+            )}
           </Grid>
 
           {peutGererProduction && (
@@ -617,6 +709,96 @@ export default function DossierDetailPage() {
               </Box>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      {/* RG35, RG38 : suivi des opérations — saisie du temps réel par le
+          Chef d'atelier, comparé à l'engagement du devis (RG39). */}
+      <Card sx={{ boxShadow: 1, mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+            Suivi des opérations — temps réel (RG35)
+          </Typography>
+
+          {lignesOperationDevis.length === 0 && (
+            <Typography color="text.secondary">
+              Aucune gamme d'opération engagée au devis pour ce dossier.
+            </Typography>
+          )}
+
+          {lignesOperationDevis.map((ligne) => {
+            const execution = executionsParLigne.get(ligne.id);
+            const valeursForm = formulaireExecution[ligne.id] || {};
+            return (
+              <Box
+                key={ligne.id}
+                sx={{ mb: 1.5, p: 1.5, borderRadius: 1, border: "1px solid", borderColor: "divider" }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Opération {ligne.ordre_execution} — {ligne.poste_nom}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Estimé : {ligne.temps_estime} min
+                  </Typography>
+                </Stack>
+
+                {execution ? (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      Temps réel : {execution.temps_reel} min — {LIBELLES_STATUT_EXECUTION[execution.statut] || execution.statut}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      Saisi par {execution.utilisateur_nom || "—"} le{" "}
+                      {execution.date_saisie ? new Date(execution.date_saisie).toLocaleString("fr-FR") : "—"}
+                    </Typography>
+                  </Box>
+                ) : peutGererProduction ? (
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1 }} alignItems="center">
+                    <TextField
+                      label="Temps réel (min)"
+                      type="number"
+                      size="small"
+                      value={valeursForm.temps_reel || ""}
+                      onChange={(e) =>
+                        setFormulaireExecution((f) => ({
+                          ...f, [ligne.id]: { ...valeursForm, temps_reel: e.target.value },
+                        }))
+                      }
+                    />
+                    <TextField
+                      select
+                      label="Statut"
+                      size="small"
+                      sx={{ minWidth: 140 }}
+                      value={valeursForm.statut || "EXECUTEE"}
+                      onChange={(e) =>
+                        setFormulaireExecution((f) => ({
+                          ...f, [ligne.id]: { ...valeursForm, statut: e.target.value },
+                        }))
+                      }
+                    >
+                      <MenuItem value="PLANIFIEE">Planifiée</MenuItem>
+                      <MenuItem value="EN_COURS">En cours</MenuItem>
+                      <MenuItem value="EXECUTEE">Exécutée</MenuItem>
+                    </TextField>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={executionEnCours === ligne.id}
+                      onClick={() => gererSaisieExecution(ligne)}
+                    >
+                      Enregistrer
+                    </Button>
+                  </Stack>
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    Pas encore exécutée.
+                  </Typography>
+                )}
+              </Box>
+            );
+          })}
         </CardContent>
       </Card>
 

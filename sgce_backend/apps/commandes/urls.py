@@ -14,9 +14,12 @@ from .views import (
     EtapeProductionListCreateView,
     ExecutionOperationDetailView,
     ExecutionOperationListCreateView,
+    LigneMatiereDevisDetailView,
     LigneMatiereDevisListCreateView,
+    LigneOperationDevisDetailView,
     LigneOperationDevisListCreateView,
     MouvementStockListCreateView,
+    OptionDevisDetailView,
     OptionDevisListCreateView,
     OrganismeClientListCreateView,
 )
@@ -44,10 +47,13 @@ urlpatterns = [
     path("mouvements/", MouvementStockListCreateView.as_view(), name="mouvements-list"),
 
     path("options-devis/", OptionDevisListCreateView.as_view(), name="options-devis-list"),
+    path("options-devis/<int:pk>/", OptionDevisDetailView.as_view(), name="options-devis-detail"),
 
     path("lignes-matiere-devis/", LigneMatiereDevisListCreateView.as_view(), name="lignes-matiere-devis-list"),
+    path("lignes-matiere-devis/<int:pk>/", LigneMatiereDevisDetailView.as_view(), name="lignes-matiere-devis-detail"),
 
     path("lignes-operation-devis/", LigneOperationDevisListCreateView.as_view(), name="lignes-operation-devis-list"),
+    path("lignes-operation-devis/<int:pk>/", LigneOperationDevisDetailView.as_view(), name="lignes-operation-devis-detail"),
 
     path("executions-operation/", ExecutionOperationListCreateView.as_view(), name="executions-operation-list"),
     path("executions-operation/<int:pk>/", ExecutionOperationDetailView.as_view(), name="executions-operation-detail"),

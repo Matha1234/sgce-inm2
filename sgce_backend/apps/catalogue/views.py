@@ -123,3 +123,60 @@ class EstimerPrixRevientCatalogueView(APIView):
         except DjangoValidationError as exc:
             raise DRFValidationError(exc.messages if hasattr(exc, "messages") else str(exc))
         return Response(resultat)
+
+
+class ComposantsAReviserView(APIView):
+    """
+    GET /api/catalogue/composants-a-reviser/
+    Réservé à l'Administrateur.
+
+    RG37 : « en cas d'écart significatif et récurrent entre le
+    prévisionnel et le réel sur une ligne d'opération ou de matière
+    première, les valeurs standards du catalogue doivent être révisées
+    pour les commandes futures — boucle de rétroaction ». Cette règle
+    n'avait encore aucun support côté API : point d'entrée absent pour que
+    l'Administrateur identifie les composants concernés.
+
+    Un composant est signalé dès lors qu'il cumule au moins deux contrôles
+    de prix de revient en écart significatif (ControlePrixRevient.
+    ecart_significatif = True), ce qui objective le caractère « récurrent »
+    de RG37 plutôt qu'un incident isolé.
+    """
+
+    SEUIL_OCCURRENCES = 2
+
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        from django.db.models import Avg, Count
+
+        from apps.controle.models import ControlePrixRevient
+
+        composants = (
+            ControlePrixRevient.objects.filter(
+                ecart_significatif=True, composant__isnull=False
+            )
+            .values(
+                "composant_id",
+                "composant__designation",
+                "composant__produit__nom",
+            )
+            .annotate(
+                nombre_ecarts=Count("id"),
+                ecart_moyen=Avg("ecart_prix_revient"),
+            )
+            .filter(nombre_ecarts__gte=self.SEUIL_OCCURRENCES)
+            .order_by("-nombre_ecarts")
+        )
+
+        donnees = [
+            {
+                "composant_id": ligne["composant_id"],
+                "produit": ligne["composant__produit__nom"],
+                "composant": ligne["composant__designation"],
+                "nombre_ecarts_significatifs": ligne["nombre_ecarts"],
+                "ecart_moyen": ligne["ecart_moyen"],
+            }
+            for ligne in composants
+        ]
+        return Response(donnees)

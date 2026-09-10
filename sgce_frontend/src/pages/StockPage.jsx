@@ -42,7 +42,7 @@ const COULEURS_MOUVEMENT = { ENTREE: "success", SORTIE: "warning" };
 
 const ARTICLE_VIDE = {
   designation: "", emplacement_stock: "", classe_comptable: "CLASSE_6", type_papier: "NON_APPLICABLE",
-  unite: "unité", cout_unitaire: "", seuil_securite: "",
+  type_encre: "", type_film: "", unite: "unité", cout_unitaire: "", seuil_securite: "",
 };
 
 function normaliser(donnees) {
@@ -124,7 +124,7 @@ export default function StockPage() {
   const refCadreMouvements = useRef(null);
   const hauteurCadreMouvements = useHauteurCinqLignes(refCadreMouvements, mouvementsPaginees.length);
 
-  const articlesEnAlerte = articles.filter((a) => Number(a.quantite_stock) <= Number(a.seuil_securite));
+  const articlesEnAlerte = articles.filter((a) => a.est_en_alerte ?? (Number(a.quantite_stock) <= Number(a.seuil_securite)));
 
   const gererRecherche = (valeur) => { setRecherche(valeur); setPage(0); };
 
@@ -140,7 +140,8 @@ export default function StockPage() {
     setFormulaireArticle({
       designation: article.designation, emplacement_stock: article.emplacement_stock || "",
       classe_comptable: article.classe_comptable,
-      type_papier: article.type_papier || "NON_APPLICABLE", unite: article.unite,
+      type_papier: article.type_papier || "NON_APPLICABLE",
+      type_encre: article.type_encre || "", type_film: article.type_film || "", unite: article.unite,
       cout_unitaire: String(article.cout_unitaire ?? ""), seuil_securite: String(article.seuil_securite ?? ""),
     });
     setDialogueArticleOuvert(true);
@@ -153,7 +154,9 @@ export default function StockPage() {
       const donnees = {
         designation: formulaireArticle.designation.trim(), emplacement_stock: (formulaireArticle.emplacement_stock || "").trim(),
         classe_comptable: formulaireArticle.classe_comptable,
-        type_papier: formulaireArticle.type_papier, unite: formulaireArticle.unite,
+        type_papier: formulaireArticle.type_papier,
+        type_encre: (formulaireArticle.type_encre || "").trim(), type_film: (formulaireArticle.type_film || "").trim(),
+        unite: formulaireArticle.unite,
         cout_unitaire: formulaireArticle.cout_unitaire || 0, seuil_securite: formulaireArticle.seuil_securite || 0,
       };
       if (articleEnEdition) await modifierArticle(articleEnEdition.id, donnees);
@@ -317,7 +320,7 @@ export default function StockPage() {
               </TableHead>
               <TableBody>
                 {articlesPaginees.map((article, index) => {
-                  const enAlerte = Number(article.quantite_stock) <= Number(article.seuil_securite);
+                  const enAlerte = article.est_en_alerte ?? (Number(article.quantite_stock) <= Number(article.seuil_securite));
                   return (
                     <TableRow key={article.id} hover sx={{
                       "&:last-child td": { borderBottom: 0 },
@@ -333,6 +336,12 @@ export default function StockPage() {
                         {article.emplacement_stock && (
                           <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 400 }}>
                             {article.emplacement_stock}
+                          </Typography>
+                        )}
+                        {(article.type_encre || article.type_film) && (
+                          <Typography variant="caption" color="text.disabled" sx={{ display: "block", fontWeight: 400 }}>
+                            {[article.type_encre && `Encre : ${article.type_encre}`, article.type_film && `Film : ${article.type_film}`]
+                              .filter(Boolean).join(" — ")}
                           </Typography>
                         )}
                       </TableCell>
@@ -405,6 +414,7 @@ export default function StockPage() {
                     <EnTeteTriable cle="type_mouvement" cleTri={cleTriMouvements} directionTri={directionTriMouvements} onTri={gererTriMouvements} sx={{ py: 0.75 }}>Type</EnTeteTriable>
                     <EnTeteTriable cle="quantite" cleTri={cleTriMouvements} directionTri={directionTriMouvements} onTri={gererTriMouvements} sx={{ py: 0.75 }}>Quantité</EnTeteTriable>
                     <EnTeteTriable cle="dossier_numero" cleTri={cleTriMouvements} directionTri={directionTriMouvements} onTri={gererTriMouvements} sx={{ py: 0.75 }}>Dossier</EnTeteTriable>
+                    <TableCell align="center" sx={{ py: 0.75, ...STYLE_EN_TETE }}>Validé par</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -424,6 +434,7 @@ export default function StockPage() {
                         {Number(mouvement.quantite).toLocaleString("fr-FR")}
                       </TableCell>
                       <TableCell align="center" sx={{ py: 0.6 }}>{mouvement.dossier_numero || "—"}</TableCell>
+                      <TableCell align="center" sx={{ py: 0.6 }}>{mouvement.valide_par_nom || "—"}</TableCell>
                     </TableRow>
                   ))}
                   {mouvements.length === 0 && (
@@ -479,6 +490,12 @@ export default function StockPage() {
                 <MenuItem key={code} value={code}>{libelle}</MenuItem>
               ))}
             </TextField>
+            <Stack direction="row" spacing={2}>
+              <TextField label="Type d'encre (optionnel)" value={formulaireArticle.type_encre}
+                onChange={(e) => setFormulaireArticle((f) => ({ ...f, type_encre: e.target.value }))} fullWidth />
+              <TextField label="Type de film (optionnel)" value={formulaireArticle.type_film}
+                onChange={(e) => setFormulaireArticle((f) => ({ ...f, type_film: e.target.value }))} fullWidth />
+            </Stack>
             <Stack direction="row" spacing={2}>
               <TextField label="Coût unitaire (Ar)" type="number" value={formulaireArticle.cout_unitaire}
                 onChange={(e) => setFormulaireArticle((f) => ({ ...f, cout_unitaire: e.target.value }))}

@@ -61,7 +61,7 @@ export default function CataloguePage() {
   const [nouvelleFamille, setNouvelleFamille] = useState({ nom: "FEUILLE_VOLANTE", structure_type: "" });
 
   const [dialogueProduit, setDialogueProduit] = useState(false);
-  const [nouveauProduit, setNouveauProduit] = useState({ famille: "", nom: "" });
+  const [nouveauProduit, setNouveauProduit] = useState({ famille: "", nom: "", reference: "", marge_min: "", marge_max: "" });
 
   const [dialoguePoste, setDialoguePoste] = useState(false);
   const [nouveauPoste, setNouveauPoste] = useState({ nom: "", type_poste: "MACHINE", cout_horaire: "" });
@@ -123,10 +123,15 @@ export default function CataloguePage() {
 
   const gererCreationProduit = async () => {
     try {
-      const cree = await creerProduit(nouveauProduit);
+      const cree = await creerProduit({
+        ...nouveauProduit,
+        reference: nouveauProduit.reference || "",
+        marge_min: nouveauProduit.marge_min || null,
+        marge_max: nouveauProduit.marge_max || null,
+      });
       afficherSucces(`Produit « ${cree.nom} » créé avec succès.`);
       setDialogueProduit(false);
-      setNouveauProduit({ famille: "", nom: "" });
+      setNouveauProduit({ famille: "", nom: "", reference: "", marge_min: "", marge_max: "" });
       await charger();
       ouvrirProduit(cree.id);
     } catch {
@@ -170,6 +175,7 @@ export default function CataloguePage() {
         article: valeurs.article,
         quantite_unitaire: valeurs.quantite_unitaire,
         type_charge: valeurs.type_charge || "VARIABLE",
+        formule_calcul: valeurs.formule_calcul || "",
       });
       afficherSucces("Ligne de matière première ajoutée avec succès.");
       setNouvelleLigneMatiere((s) => ({ ...s, [composantId]: {} }));
@@ -189,6 +195,7 @@ export default function CataloguePage() {
         libelle: valeurs.libelle,
         temps_unitaire: valeurs.temps_unitaire,
         type_charge: valeurs.type_charge || "VARIABLE",
+        formule_calcul: valeurs.formule_calcul || "",
       });
       afficherSucces("Ligne d'opération ajoutée avec succès.");
       setNouvelleLigneOperation((s) => ({ ...s, [composantId]: {} }));
@@ -451,10 +458,27 @@ export default function CataloguePage() {
               <Box sx={{ p: 2.5, pb: 0 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                   <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{produitSelectionne.nom}</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {produitSelectionne.nom}
+                      {produitSelectionne.reference && (
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                          ({produitSelectionne.reference})
+                        </Typography>
+                      )}
+                    </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {LIBELLES_FAMILLE[produitSelectionne.famille] || produitSelectionne.famille_nom}
                     </Typography>
+                    {(produitSelectionne.marge_min != null || produitSelectionne.marge_max != null) && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                        Marge cible : {produitSelectionne.marge_min ?? "—"}% à {produitSelectionne.marge_max ?? "—"}%
+                      </Typography>
+                    )}
+                    {produitSelectionne.date_maj && (
+                      <Typography variant="caption" color="text.disabled" sx={{ display: "block" }}>
+                        Dernière mise à jour : {new Date(produitSelectionne.date_maj).toLocaleDateString("fr-FR")}
+                      </Typography>
+                    )}
                   </Box>
                   <Tooltip title="Supprimer ce produit">
                     <IconButton
@@ -504,16 +528,23 @@ export default function CataloguePage() {
                               </Typography>
                             )}
                             {composant.lignes_matiere_premiere.map((l) => (
-                              <Stack key={l.id} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.2 }}>
-                                <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
-                                  {l.article_designation} — {l.quantite_unitaire} {l.article_unite}/ex
-                                </Typography>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                  <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
-                                  <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)} sx={{ width: 22, height: 22 }}>
-                                    <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                  </IconButton>
+                              <Stack key={l.id} direction="column" sx={{ py: 0.2 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
+                                    {l.article_designation} — {l.quantite_unitaire} {l.article_unite}/ex
+                                  </Typography>
+                                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                                    <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
+                                    <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)} sx={{ width: 22, height: 22 }}>
+                                      <DeleteOutlineIcon sx={{ fontSize: 12 }} />
+                                    </IconButton>
+                                  </Stack>
                                 </Stack>
+                                {l.formule_calcul && (
+                                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, fontStyle: "italic" }}>
+                                    Formule : {l.formule_calcul}
+                                  </Typography>
+                                )}
                               </Stack>
                             ))}
                             <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }}>
@@ -544,6 +575,13 @@ export default function CataloguePage() {
                                 <AddIcon fontSize="small" />
                               </Button>
                             </Stack>
+                            <TextField
+                              size="small" label="Formule de calcul (optionnel)"
+                              fullWidth
+                              sx={{ mt: 0.5, "& .MuiInputBase-root": { fontSize: 11 }, "& .MuiInputLabel-root": { fontSize: 11 } }}
+                              value={nouvelleLigneMatiere[composant.id]?.formule_calcul || ""}
+                              onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
+                            />
                           </Grid>
 
                           {/* Opérations column */}
@@ -557,16 +595,23 @@ export default function CataloguePage() {
                               </Typography>
                             )}
                             {composant.lignes_operation.map((l) => (
-                              <Stack key={l.id} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.2 }}>
-                                <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
-                                  {l.libelle} — {l.poste_nom} ({l.temps_unitaire} min/ex)
-                                </Typography>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                  <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
-                                  <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)} sx={{ width: 22, height: 22 }}>
-                                    <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                  </IconButton>
+                              <Stack key={l.id} direction="column" sx={{ py: 0.2 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
+                                    {l.libelle} — {l.poste_nom} ({l.temps_unitaire} min/ex)
+                                  </Typography>
+                                  <Stack direction="row" alignItems="center" spacing={0.5}>
+                                    <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
+                                    <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)} sx={{ width: 22, height: 22 }}>
+                                      <DeleteOutlineIcon sx={{ fontSize: 12 }} />
+                                    </IconButton>
+                                  </Stack>
                                 </Stack>
+                                {l.formule_calcul && (
+                                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, fontStyle: "italic" }}>
+                                    Formule : {l.formule_calcul}
+                                  </Typography>
+                                )}
                               </Stack>
                             ))}
                             <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
@@ -603,6 +648,13 @@ export default function CataloguePage() {
                                 <AddIcon fontSize="small" />
                               </Button>
                             </Stack>
+                            <TextField
+                              size="small" label="Formule de calcul (optionnel)"
+                              fullWidth
+                              sx={{ mt: 0.5, "& .MuiInputBase-root": { fontSize: 11 }, "& .MuiInputLabel-root": { fontSize: 11 } }}
+                              value={nouvelleLigneOperation[composant.id]?.formule_calcul || ""}
+                              onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
+                            />
                             <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setDialoguePoste(true)} sx={{ mt: 0.75, px: 1.5, fontSize: 12 }}>
                               + Poste de charge
                             </Button>
@@ -690,6 +742,22 @@ export default function CataloguePage() {
               label="Nom du produit" value={nouveauProduit.nom}
               onChange={(e) => setNouveauProduit((s) => ({ ...s, nom: e.target.value }))}
             />
+            <TextField
+              label="Référence (optionnel)" value={nouveauProduit.reference || ""}
+              onChange={(e) => setNouveauProduit((s) => ({ ...s, reference: e.target.value }))}
+            />
+            <Stack direction="row" spacing={2}>
+              <TextField
+                label="Marge min (%)" type="number" fullWidth
+                value={nouveauProduit.marge_min || ""}
+                onChange={(e) => setNouveauProduit((s) => ({ ...s, marge_min: e.target.value }))}
+              />
+              <TextField
+                label="Marge max (%)" type="number" fullWidth
+                value={nouveauProduit.marge_max || ""}
+                onChange={(e) => setNouveauProduit((s) => ({ ...s, marge_max: e.target.value }))}
+              />
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>

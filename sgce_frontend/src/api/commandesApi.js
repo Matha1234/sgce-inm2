@@ -5,7 +5,8 @@ export const listerOrganismes = () => axiosClient.get("/organismes/").then((r) =
 export const creerOrganisme = (donnees) => axiosClient.post("/organismes/", donnees).then((r) => r.data);
 
 // --- Commandes ---
-export const listerCommandes = () => axiosClient.get("/commandes/").then((r) => r.data);
+// UC-14 : ?organisme=<id> pour l'historique des commandes/devis d'un client.
+export const listerCommandes = (params) => axiosClient.get("/commandes/", { params }).then((r) => r.data);
 export const recupererCommande = (id) => axiosClient.get(`/commandes/${id}/`).then((r) => r.data);
 export const creerCommande = (donnees) => axiosClient.post("/commandes/", donnees).then((r) => r.data);
 export const modifierCommande = (id, donnees) =>
@@ -44,3 +45,40 @@ export const creerMouvement = (donnees) => axiosClient.post("/mouvements/", donn
 // --- Facturation ---
 export const listerFactures = () => axiosClient.get("/factures/").then((r) => r.data);
 export const creerFacture = (donnees) => axiosClient.post("/factures/", donnees).then((r) => r.data);
+
+// --- Options de devis (RG33) — personnalisation sur-mesure ---
+export const listerOptionsDevis = (devisId) =>
+  axiosClient.get("/options-devis/", { params: devisId ? { devis: devisId } : undefined }).then((r) => r.data);
+export const creerOptionDevis = (donnees) => axiosClient.post("/options-devis/", donnees).then((r) => r.data);
+export const modifierOptionDevis = (id, donnees) =>
+  axiosClient.patch(`/options-devis/${id}/`, donnees).then((r) => r.data);
+export const supprimerOptionDevis = (id) => axiosClient.delete(`/options-devis/${id}/`).then((r) => r.data);
+
+// --- Détail matière/opération du devis (RG39) ---
+export const listerLignesMatiereDevis = (ligneDevisId) =>
+  axiosClient
+    .get("/lignes-matiere-devis/", { params: ligneDevisId ? { ligne_devis: ligneDevisId } : undefined })
+    .then((r) => r.data);
+export const modifierLigneMatiereDevis = (id, donnees) =>
+  axiosClient.patch(`/lignes-matiere-devis/${id}/`, donnees).then((r) => r.data);
+export const supprimerLigneMatiereDevis = (id) =>
+  axiosClient.delete(`/lignes-matiere-devis/${id}/`).then((r) => r.data);
+
+export const listerLignesOperationDevis = (ligneDevisId) =>
+  axiosClient
+    .get("/lignes-operation-devis/", { params: ligneDevisId ? { ligne_devis: ligneDevisId } : undefined })
+    .then((r) => r.data);
+export const modifierLigneOperationDevis = (id, donnees) =>
+  axiosClient.patch(`/lignes-operation-devis/${id}/`, donnees).then((r) => r.data);
+export const supprimerLigneOperationDevis = (id) =>
+  axiosClient.delete(`/lignes-operation-devis/${id}/`).then((r) => r.data);
+
+// --- Exécutions d'opération (RG35, RG38) — temps réel saisi par le Chef d'atelier ---
+export const listerExecutionsOperation = (dossierId) =>
+  axiosClient
+    .get("/executions-operation/", { params: dossierId ? { dossier: dossierId } : undefined })
+    .then((r) => r.data);
+export const creerExecutionOperation = (donnees) =>
+  axiosClient.post("/executions-operation/", donnees).then((r) => r.data);
+export const modifierExecutionOperation = (id, donnees) =>
+  axiosClient.patch(`/executions-operation/${id}/`, donnees).then((r) => r.data);

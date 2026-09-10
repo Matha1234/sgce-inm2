@@ -1,5 +1,7 @@
 from django.conf import settings
+from decimal import Decimal
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
@@ -196,8 +198,8 @@ class Devis(models.Model):
         default=dict, blank=True,
         help_text="Options mineures ajustées au devis (ex. couleur du papier de couverture).",
     )
-    prix_revient = models.DecimalField(max_digits=12, decimal_places=2)
-    prix_vente = models.DecimalField(max_digits=12, decimal_places=2)
+    prix_revient = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
+    prix_vente = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
     duree_production = models.PositiveIntegerField(
         default=1, help_text="Durée réelle ou estimée de production, en jours."
     )
@@ -242,6 +244,26 @@ class Devis(models.Model):
                     "Le taux d'inflation projeté est obligatoire pour valider un devis pluriannuel (RG22)."
                 )
 
+    def recalculer_prix_revient(self):
+        """Recalcule le coût du devis à partir de ses lignes et de ses options."""
+        if not self.produit_catalogue_id:
+            return self.prix_revient
+
+        total_lignes = sum(
+            (ligne.cout_total_estime for ligne in self.lignes_devis.all()),
+            Decimal("0"),
+        )
+        total_options = sum(
+            (option.surcout_total for option in self.options.all()),
+            Decimal("0"),
+        )
+        self.prix_revient = (total_lignes + total_options).quantize(Decimal("0.01"))
+        return self.prix_revient
+
+    def recalculer_et_sauvegarder_prix_revient(self):
+        self.recalculer_prix_revient()
+        self.save(update_fields=["prix_revient"])
+
     def generer_lignes_devis(self, remarques_par_composant=None):
         """
         RG27 + RG28 (mise à jour STI) : génère les LigneDevis du devis à
@@ -256,6 +278,14 @@ class Devis(models.Model):
         mineure spécifique au devis) prévaut sur le comportement théorique
         du catalogue lors de la génération du dossier de fabrication.
 
+        RG39 (correctif) : chaque LigneDevis est en outre détaillée par
+        copie depuis la nomenclature et la gamme du composant catalogue
+        (LigneMatiereDevis depuis LigneMatierePremiere, LigneOperationDevis
+        depuis LigneOperation), pour la quantité commandée — jusqu'ici
+        documenté sur les modèles mais jamais réellement exécuté, ce qui
+        laissait ExecutionOperation et la génération du dossier de
+        fabrication (RG7, RG34) sans aucune donnée à exploiter.
+
         Ne fait rien si le devis n'est pas rattaché à un produit du
         catalogue (prévisionnel saisi manuellement, non granulaire).
         Les lignes existantes sont remplacées (recréation du chiffrage).
@@ -265,6 +295,7 @@ class Devis(models.Model):
 
         resultat = self.produit_catalogue.calculer_prix_revient(self.commande.quantite)
         remarques = remarques_par_composant or {}
+        quantite = self.commande.quantite
 
         LigneDevis.objects.filter(devis=self).delete()
         lignes = []
@@ -282,6 +313,56 @@ class Devis(models.Model):
                 )
             )
         LigneDevis.objects.bulk_create(lignes)
+
+        # RG39 : copie du detail matiere/operation, composant par composant,
+        # depuis la nomenclature et la gamme catalogue.
+        lignes_matiere_a_creer = []
+        lignes_operation_a_creer = []
+        for ligne_devis in lignes:
+            composant = ligne_devis.composant
+            for ligne_matiere in composant.lignes_matiere_premiere.select_related("article").all():
+                if ligne_matiere.type_charge == ligne_matiere.TypeCharge.FIXE:
+                    quantite_estimee = ligne_matiere.quantite_unitaire
+                else:
+                    quantite_estimee = ligne_matiere.quantite_unitaire * quantite
+                cout_estime = quantite_estimee * (ligne_matiere.article.cout_unitaire or 0)
+                lignes_matiere_a_creer.append(
+                    LigneMatiereDevis(
+                        ligne_devis=ligne_devis,
+                        article=ligne_matiere.article,
+                        quantite_estimee=quantite_estimee,
+                        unite=getattr(ligne_matiere, "unite", "") or "",
+                        cout_estime=cout_estime,
+                    )
+                )
+
+            for rang, ligne_operation in enumerate(
+                composant.lignes_operation.select_related("poste").all(), start=1
+            ):
+                if ligne_operation.type_charge == ligne_operation.TypeCharge.FIXE:
+                    temps_estime = ligne_operation.temps_unitaire
+                else:
+                    temps_estime = ligne_operation.temps_unitaire * quantite
+                cout_horaire = ligne_operation.poste.cout_horaire or 0
+                cout_estime = (temps_estime / 60) * cout_horaire
+                lignes_operation_a_creer.append(
+                    LigneOperationDevis(
+                        ligne_devis=ligne_devis,
+                        poste=ligne_operation.poste,
+                        ordre_execution=rang,
+                        temps_estime=temps_estime,
+                        cout_estime=cout_estime,
+                    )
+                )
+
+        if lignes_matiere_a_creer:
+            LigneMatiereDevis.objects.bulk_create(lignes_matiere_a_creer)
+        if lignes_operation_a_creer:
+            LigneOperationDevis.objects.bulk_create(lignes_operation_a_creer)
+
+        self.recalculer_prix_revient()
+        self.save(update_fields=["prix_revient"])
+
         return lignes
 
 
@@ -311,11 +392,11 @@ class OptionDevis(models.Model):
         help_text="Description detaillee de l'option.",
     )
     surcout_matiere = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True,
+        max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal("0"))],
         help_text="Surcoût matière de cette option, le cas échéant (RG33).",
     )
     surcout_operation = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True,
+        max_digits=12, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(Decimal("0"))],
         help_text="Surcoût opération de cette option, le cas échéant (RG33).",
     )
     date_ajout = models.DateTimeField(auto_now_add=True)
@@ -412,7 +493,7 @@ class LigneMatiereDevis(models.Model):
         "commandes.Article", on_delete=models.PROTECT, related_name="lignes_devis"
     )
     quantite_estimee = models.DecimalField(
-        max_digits=10, decimal_places=3,
+        max_digits=10, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))],
         help_text="Quantité estimée de matière pour ce devis.",
     )
     unite = models.CharField(max_length=20, blank=True)
@@ -456,7 +537,7 @@ class LigneOperationDevis(models.Model):
         help_text="Rang d'execution de l'operation dans la gamme.",
     )
     temps_estime = models.DecimalField(
-        max_digits=8, decimal_places=2,
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))],
         help_text="Temps estimé pour cette opération, en minutes (RG39).",
     )
     cout_estime = models.DecimalField(
@@ -610,7 +691,7 @@ class ExecutionOperation(models.Model):
         null=True, blank=True, related_name="executions_saisies",
     )
     temps_reel = models.DecimalField(
-        max_digits=8, decimal_places=2,
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))],
         help_text="Temps réellement passé, en minutes (RG35).",
     )
     statut = models.CharField(
@@ -666,13 +747,17 @@ class Article(models.Model):
     type_film = models.CharField(max_length=50, blank=True)
     unite = models.CharField(max_length=20, default="unité")
     cout_unitaire = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0,
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(Decimal("0"))],
         help_text="Coût unitaire de l'article, utilisé par le moteur de calcul du catalogue (RG27).",
     )
 
-    quantite_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    quantite_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(Decimal("0"))])
+    quantite_reservee = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(Decimal("0"))],
+        help_text="Quantité réservée pour des dossiers de fabrication, non encore sortie physiquement.",
+    )
     seuil_securite = models.DecimalField(
-        max_digits=12, decimal_places=2, default=0,
+        max_digits=12, decimal_places=2, default=0, validators=[MinValueValidator(Decimal("0"))],
         help_text="Stock de sécurité : seuil en-dessous duquel une alerte est déclenchée.",
     )
 
@@ -684,8 +769,12 @@ class Article(models.Model):
         return self.designation
 
     @property
+    def quantite_disponible(self):
+        return self.quantite_stock - self.quantite_reservee
+
+    @property
     def est_en_alerte(self):
-        return self.quantite_stock <= self.seuil_securite
+        return self.quantite_disponible <= self.seuil_securite
 
 
 class MouvementStock(models.Model):
@@ -708,7 +797,7 @@ class MouvementStock(models.Model):
         related_name="mouvements_stock",
     )
     type_mouvement = models.CharField(max_length=15, choices=TypeMouvement.choices)
-    quantite = models.DecimalField(max_digits=12, decimal_places=2)
+    quantite = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
     commentaire = models.CharField(
         max_length=255, blank=True,
         help_text="Commentaire libre sur le mouvement de stock.",
@@ -726,30 +815,77 @@ class MouvementStock(models.Model):
     def __str__(self):
         return f"{self.get_type_mouvement_display()} {self.quantite} {self.article.unite} - {self.article.designation}"
 
+    def clean(self):
+        if self.quantite is None or self.quantite <= 0:
+            raise ValidationError({"quantite": "La quantité du mouvement doit être strictement positive."})
+
     def save(self, *args, **kwargs):
         est_nouveau = self._state.adding
-        super().save(*args, **kwargs)
-
         if not est_nouveau:
+            super().save(*args, **kwargs)
             return
 
-        if self.type_mouvement in (self.TypeMouvement.SORTIE, self.TypeMouvement.RESERVATION):
-            # Mise a jour atomique et verification de disponibilite (RG11) :
-            # ne decremente que si le stock est encore suffisant au moment
-            # de l'ecriture, protegeant contre les acces concurrents.
-            # RESERVATION (RG34) reserve le stock avant sortie physique.
-            nb_lignes_maj = Article.objects.filter(
-                pk=self.article_id, quantite_stock__gte=self.quantite
-            ).update(quantite_stock=F("quantite_stock") - self.quantite)
+        self.full_clean()
+        with transaction.atomic():
+            article = Article.objects.select_for_update().get(pk=self.article_id)
 
-            if not nb_lignes_maj:
-                # Annule le mouvement qui vient d'etre enregistre : le stock
-                # etait finalement insuffisant.
-                MouvementStock.objects.filter(pk=self.pk).delete()
-                raise ValidationError(
-                    "Quantité en stock insuffisante pour cette sortie/réservation (RG11)."
+            if self.type_mouvement == self.TypeMouvement.RESERVATION:
+                # Une réservation ne consomme pas le stock physique : elle
+                # diminue uniquement la quantité disponible.
+                disponible = article.quantite_stock - article.quantite_reservee
+                if disponible < self.quantite:
+                    raise ValidationError(
+                        "Quantité disponible insuffisante pour cette réservation (RG11/RG34)."
+                    )
+                Article.objects.filter(pk=article.pk).update(
+                    quantite_reservee=F("quantite_reservee") + self.quantite
                 )
-        else:
-            Article.objects.filter(pk=self.article_id).update(
-                quantite_stock=F("quantite_stock") + self.quantite
-            )
+
+            elif self.type_mouvement == self.TypeMouvement.SORTIE:
+                # Une sortie physique consomme d'abord une réservation du
+                # dossier si elle existe, puis diminue le stock physique.
+                from django.db.models import Sum
+
+                reserve_dossier = (
+                    MouvementStock.objects.filter(
+                        article_id=article.pk,
+                        dossier_id=self.dossier_id,
+                        type_mouvement=self.TypeMouvement.RESERVATION,
+                    ).aggregate(total=Sum("quantite"))["total"] or Decimal("0")
+                )
+                sorties_dossier = (
+                    MouvementStock.objects.filter(
+                        article_id=article.pk,
+                        dossier_id=self.dossier_id,
+                        type_mouvement=self.TypeMouvement.SORTIE,
+                    ).aggregate(total=Sum("quantite"))["total"] or Decimal("0")
+                )
+                reservation_restante = max(reserve_dossier - sorties_dossier, Decimal("0"))
+                disponible = article.quantite_stock - article.quantite_reservee
+                quantite_couverte_par_reservation = min(self.quantite, reservation_restante)
+                quantite_hors_reservation = self.quantite - quantite_couverte_par_reservation
+
+                if quantite_hors_reservation > disponible:
+                    raise ValidationError(
+                        "Quantité disponible insuffisante pour cette sortie (RG11)."
+                    )
+
+                Article.objects.filter(pk=article.pk).update(
+                    quantite_stock=F("quantite_stock") - self.quantite,
+                    quantite_reservee=F("quantite_reservee") - quantite_couverte_par_reservation,
+                )
+
+            elif self.type_mouvement == self.TypeMouvement.ENTREE:
+                Article.objects.filter(pk=article.pk).update(
+                    quantite_stock=F("quantite_stock") + self.quantite
+                )
+
+            super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Les mouvements sont une trace comptable : ils ne doivent pas être
+        # supprimés silencieusement après avoir modifié le stock. Les vues
+        # n'exposent pas DELETE, mais cette garde protège aussi l'admin/API.
+        raise ValidationError(
+            "Un mouvement de stock ne peut pas être supprimé ; utilisez un mouvement inverse."
+        )

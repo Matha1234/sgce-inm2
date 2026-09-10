@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     ComposantDetailView,
     ComposantListCreateView,
+    ComposantsAReviserView,
     EstimerPrixRevientCatalogueView,
     FamilleProduitDetailView,
     FamilleProduitListCreateView,
@@ -36,4 +37,6 @@ urlpatterns = [
     path("catalogue/lignes-operation/<int:pk>/", LigneOperationDetailView.as_view(), name="ligne-operation-detail"),
 
     path("catalogue/estimer/", EstimerPrixRevientCatalogueView.as_view(), name="catalogue-estimer"),
+
+    path("catalogue/composants-a-reviser/", ComposantsAReviserView.as_view(), name="catalogue-composants-a-reviser"),
 ]

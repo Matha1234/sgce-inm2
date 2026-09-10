@@ -36,7 +36,9 @@ export default function NouvelleCommandeForm({ onSuccess, onCancel }) {
   const { afficherSucces } = useNotifier();
   const [organismes, setOrganismes] = useState([]);
   const [organismeId, setOrganismeId] = useState("");
-  const [nouvelOrganisme, setNouvelOrganisme] = useState({ nom: "", type: "MINISTERE" });
+  const [nouvelOrganisme, setNouvelOrganisme] = useState({
+    nom: "", type: "MINISTERE", adresse: "", nif_stat: "", telephone: "", email: "", contact_principal: "",
+  });
   const [afficherNouvelOrganisme, setAfficherNouvelOrganisme] = useState(false);
 
   const [nature, setNature] = useState("STANDARDISEE");
@@ -61,7 +63,9 @@ export default function NouvelleCommandeForm({ onSuccess, onCancel }) {
       setOrganismes((liste) => [...liste, organisme]);
       setOrganismeId(organisme.id);
       setAfficherNouvelOrganisme(false);
-      setNouvelOrganisme({ nom: "", type: "MINISTERE" });
+      setNouvelOrganisme({
+        nom: "", type: "MINISTERE", adresse: "", nif_stat: "", telephone: "", email: "", contact_principal: "",
+      });
       afficherSucces(`Organisme « ${organisme.nom} » créé avec succès.`);
     } catch {
       setErreur("Impossible de créer cet organisme.");
@@ -136,14 +140,14 @@ export default function NouvelleCommandeForm({ onSuccess, onCancel }) {
       {afficherNouvelOrganisme && (
         <Box
           sx={{
-            display: "flex", gap: 1, mb: 2, p: 1.5, alignItems: "flex-start",
+            display: "flex", flexWrap: "wrap", gap: 1, mb: 2, p: 1.5, alignItems: "flex-start",
             bgcolor: "action.hover", borderRadius: 1.5,
           }}
         >
           <TextField
             label="Nom de l'organisme"
             size="small"
-            fullWidth
+            sx={{ flex: "1 1 200px" }}
             value={nouvelOrganisme.nom}
             onChange={(e) => setNouvelOrganisme((v) => ({ ...v, nom: e.target.value }))}
           />
@@ -161,6 +165,42 @@ export default function NouvelleCommandeForm({ onSuccess, onCancel }) {
               </MenuItem>
             ))}
           </TextField>
+          <TextField
+            label="Adresse"
+            size="small"
+            sx={{ flex: "1 1 200px" }}
+            value={nouvelOrganisme.adresse}
+            onChange={(e) => setNouvelOrganisme((v) => ({ ...v, adresse: e.target.value }))}
+          />
+          <TextField
+            label="NIF / STAT"
+            size="small"
+            sx={{ flex: "1 1 140px" }}
+            value={nouvelOrganisme.nif_stat}
+            onChange={(e) => setNouvelOrganisme((v) => ({ ...v, nif_stat: e.target.value }))}
+          />
+          <TextField
+            label="Téléphone"
+            size="small"
+            sx={{ flex: "1 1 140px" }}
+            value={nouvelOrganisme.telephone}
+            onChange={(e) => setNouvelOrganisme((v) => ({ ...v, telephone: e.target.value }))}
+          />
+          <TextField
+            label="Email"
+            size="small"
+            type="email"
+            sx={{ flex: "1 1 180px" }}
+            value={nouvelOrganisme.email}
+            onChange={(e) => setNouvelOrganisme((v) => ({ ...v, email: e.target.value }))}
+          />
+          <TextField
+            label="Contact principal"
+            size="small"
+            sx={{ flex: "1 1 180px" }}
+            value={nouvelOrganisme.contact_principal}
+            onChange={(e) => setNouvelOrganisme((v) => ({ ...v, contact_principal: e.target.value }))}
+          />
           <Button variant="outlined" onClick={gererCreationOrganisme} sx={{ whiteSpace: "nowrap" }}>
             Ajouter
           </Button>

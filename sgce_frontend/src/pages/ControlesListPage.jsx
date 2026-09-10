@@ -1,46 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Card, CardContent, Chip, CircularProgress,
+  Alert, Box, Card, CardContent, Chip, CircularProgress, Grid,
   Paper, Stack, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Typography,
 } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import BalanceIcon from "@mui/icons-material/Balance";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 
 import { listerControles, recupererTableauBordRentabilite } from "../api/controleApi";
 import { COULEURS_RESULTAT_CONTROLE, LIBELLES_RESULTAT_CONTROLE } from "../constants/roles";
-import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
+import PageHeader from "../components/common/PageHeader";
 import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable";
 import PaginationBar from "../components/common/PaginationBar";
 import BoutonExport from "../components/common/BoutonExport";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
-
-function CarteChiffre({ titre, valeur, icone, couleur = "primary.main" }) {
-  return (
-    <Card
-      sx={{
-        height: "100%",
-        borderLeft: "4px solid",
-        borderLeftColor: couleur,
-        transition: "box-shadow 0.15s, transform 0.15s",
-        "&:hover": { boxShadow: 4, transform: "translateY(-2px)" },
-      }}
-    >
-      <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.75, py: 2.25, "&:last-child": { pb: 2.25 } }}>
-        <PastilleIcone icone={icone} couleur={couleur} taille={42} />
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" color="text.secondary" noWrap>{titre}</Typography>
-          <Typography variant="h5" sx={{ color: couleur, fontWeight: 700, lineHeight: 1.25 }}>{valeur}</Typography>
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
+import { CarteAnneau, CarteDonutLegende } from "../components/common/CartesTableauBord";
 
 export default function ControlesListPage() {
   const [chargement, setChargement] = useState(true);
@@ -122,7 +97,9 @@ export default function ControlesListPage() {
                 e.colonne("Dossier", "dossier_numero"),
                 e.colonne("Atelier", "atelier_nom"),
                 e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
+                e.colonnePerso("Prix de revient estimé", (c) => c.prix_revient_estime != null ? `${Number(c.prix_revient_estime).toLocaleString("fr-FR")} Ar` : "", "right"),
                 e.colonnePerso("Coût réel", (c) => `${Number(c.cout_reel_total).toLocaleString("fr-FR")} Ar`, "right"),
+                e.colonnePerso("Écart", (c) => c.ecart_prix_revient != null ? `${Number(c.ecart_prix_revient).toLocaleString("fr-FR")} Ar` : "", "right"),
                 e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
                 e.colonne("Résultat", "resultat"),
               ],
@@ -140,10 +117,12 @@ export default function ControlesListPage() {
                   e.colonne("Dossier", "dossier_numero"),
                   e.colonne("Atelier", "atelier_nom"),
                   e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
+                  e.colonnePerso("Prix de revient estimé", (c) => c.prix_revient_estime != null ? Number(c.prix_revient_estime).toLocaleString("fr-FR") : "", "right"),
                   e.colonnePerso("Coût réel", (c) => Number(c.cout_reel_total).toLocaleString("fr-FR"), "right"),
+                  e.colonnePerso("Écart (Ar)", (c) => c.ecart_prix_revient != null ? Number(c.ecart_prix_revient).toLocaleString("fr-FR") : "", "right"),
                   e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
                   e.colonne("Résultat", "resultat"),
-                  e.colonnePerso("Écart", (c) => c.ecart_significatif ? "Significatif" : ""),
+                  e.colonnePerso("Écart significatif", (c) => c.ecart_significatif ? "Significatif" : ""),
                   e.colonnePerso("Date", (c) => new Date(c.date_controle).toLocaleDateString("fr-FR")),
                 ],
                 lignes: controles,
@@ -155,20 +134,38 @@ export default function ControlesListPage() {
         />
       </Box>
 
-      {/* Indicateurs (partie non scrollable) */}
+      {/* Indicateurs (partie non scrollable) — même style de cartes (anneaux,
+          donut avec légende) que le tableau de bord, pour une identité
+          visuelle cohérente entre les deux écrans qui montrent la
+          rentabilité. */}
       {indicateurs && (
-        <Box sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" },
-          gap: 2, mb: 3, flexShrink: 0,
-        }}>
-          <CarteChiffre titre="Dossiers contrôlés" valeur={indicateurs.nombre_controles} icone={<FactCheckIcon sx={{ fontSize: 20 }} />} />
-          <CarteChiffre titre="Sous-marge" valeur={indicateurs.nombre_sous_marge} icone={<TrendingDownIcon sx={{ fontSize: 20 }} />} couleur="error.main" />
-          <CarteChiffre titre="Dans la norme" valeur={indicateurs.nombre_dans_la_norme} icone={<BalanceIcon sx={{ fontSize: 20 }} />} couleur="success.main" />
-          <CarteChiffre titre="Sur-marge" valeur={indicateurs.nombre_sur_marge} icone={<TrendingUpIcon sx={{ fontSize: 20 }} />} couleur="warning.main" />
-          <CarteChiffre titre="Écarts significatifs" valeur={indicateurs.nombre_ecarts_significatifs} icone={<WarningAmberIcon sx={{ fontSize: 20 }} />} couleur="warning.main" />
-          <CarteChiffre titre="Marge moyenne" valeur={`${indicateurs.marge_moyenne_pourcentage}%`} icone={<AssessmentIcon sx={{ fontSize: 20 }} />} />
-        </Box>
+        <Grid container spacing={2} sx={{ mb: 3, flexShrink: 0 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <CarteDonutLegende
+              titre="Résultats de contrôle"
+              segments={[
+                { label: "Sous-marge", value: indicateurs.nombre_sous_marge, couleur: "#d32f2f" },
+                { label: "Dans la norme", value: indicateurs.nombre_dans_la_norme, couleur: "#2e7d32" },
+                { label: "Sur-marge", value: indicateurs.nombre_sur_marge, couleur: "#ed6c02" },
+              ].filter((s) => s.value > 0)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <CarteAnneau
+              titre="Marge moyenne" libelleValeur={`${indicateurs.marge_moyenne_pourcentage}%`}
+              pourcentage={indicateurs.marge_moyenne_pourcentage} couleur="#1565c0"
+              sousTitre={`${indicateurs.nombre_controles} fiche(s) de contrôle`}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+            <CarteAnneau
+              titre="Écarts significatifs" libelleValeur={indicateurs.nombre_ecarts_significatifs}
+              pourcentage={indicateurs.nombre_controles > 0 ? (indicateurs.nombre_ecarts_significatifs / indicateurs.nombre_controles) * 100 : 0}
+              couleur={indicateurs.nombre_ecarts_significatifs > 0 ? "#d32f2f" : "#2e7d32"}
+              sousTitre={`sur ${indicateurs.nombre_controles} fiches`}
+            />
+          </Grid>
+        </Grid>
       )}
 
       {/* Tableau des fiches de contrôle (scrollable) */}
@@ -211,13 +208,25 @@ export default function ControlesListPage() {
                       ? `C${controle.composant_ordre} · ${controle.composant_designation}`
                       : "Global"}
                   </TableCell>
-                  <TableCell align="center">{Number(controle.cout_reel_total).toLocaleString("fr-FR")} Ar</TableCell>
+                  <TableCell align="center">
+                    {Number(controle.cout_reel_total).toLocaleString("fr-FR")} Ar
+                    {controle.prix_revient_estime != null && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                        Estimé : {Number(controle.prix_revient_estime).toLocaleString("fr-FR")} Ar
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell align="center" sx={{ fontWeight: 600 }}>{controle.marge_reelle_pourcentage}%</TableCell>
                   <TableCell align="center">
                     <Chip size="small" label={LIBELLES_RESULTAT_CONTROLE[controle.resultat] || controle.resultat}
                       color={COULEURS_RESULTAT_CONTROLE[controle.resultat] || "default"} sx={{ fontWeight: 600 }} />
                   </TableCell>
                   <TableCell align="center">
+                    {controle.ecart_prix_revient != null && (
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {Number(controle.ecart_prix_revient).toLocaleString("fr-FR")} Ar
+                      </Typography>
+                    )}
                     {controle.ecart_significatif && (
                       <Chip size="small" label="Significatif" color="warning" variant="outlined" sx={{ fontWeight: 600 }} />
                     )}

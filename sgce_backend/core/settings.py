@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [h.strip() for h in config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',') if h.strip()]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -97,7 +97,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── CORS ─────────────────────────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = True  # uniquement en développement
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in config('CORS_ALLOWED_ORIGINS', default=config('FRONTEND_URL', default='http://localhost:5173')).split(',')
+    if origin.strip()
+]
+
 
 # ── Email (réinitialisation de mot de passe) ──────────────────────────────
 # SMTP Gmail par défaut : renseigner EMAIL_HOST_USER / EMAIL_HOST_PASSWORD

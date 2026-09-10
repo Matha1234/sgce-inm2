@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Divider,
-  FormControlLabel, MenuItem, Stack, TextField, Typography,
+  FormControlLabel, IconButton, MenuItem, Stack, TextField, Typography,
 } from "@mui/material";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import AddCircleOutlinedIcon from "@mui/icons-material/AddCircleOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
 import {
-  creerDevis, creerDossier, modifierDevis, recupererCommande,
+  creerDevis, creerDossier, creerOptionDevis, modifierDevis,
+  recupererCommande, supprimerOptionDevis,
 } from "../../api/commandesApi";
 import {
   estimerPrixRevientCatalogue, listerProduits,
@@ -76,6 +79,13 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
   const [estimationCatalogue, setEstimationCatalogue] = useState(null);
   // RG30 : remarque technique par composant (optionnelle), envoyée à la création du devis.
   const [remarquesLignes, setRemarquesLignes] = useState({});
+
+  // RG33 : options de personnalisation du devis (jusqu'ici sans aucune UI).
+  const [afficherFormOption, setAfficherFormOption] = useState(false);
+  const [nouvelleOption, setNouvelleOption] = useState({
+    libelle: "", description: "", surcout_matiere: "", surcout_operation: "",
+  });
+  const [optionEnCours, setOptionEnCours] = useState(false);
 
   const charger = () => {
     setChargement(true);
@@ -163,7 +173,13 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
     setEnCours(true);
     try {
       await modifierDevis(commande.devis.id, { valide: true });
-      afficherSucces("Devis validé avec succès. La commande est désormais validée.");
+      // RG4/RG5/RG8/RG34 (UC-03) : le dossier de fabrication est désormais
+      // généré automatiquement par le serveur à la validation (atelier
+      // affecté par équilibrage de charge, étapes et réservations de
+      // matières créées) — plus besoin d'une action manuelle séparée.
+      afficherSucces(
+        "Devis validé avec succès. Le dossier de fabrication a été généré automatiquement."
+      );
       charger();
     } catch (err) {
       const donnees = err.response?.data;
@@ -187,6 +203,45 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
       setErreur(donnees ? JSON.stringify(donnees) : "Impossible de créer le dossier de fabrication.");
     } finally {
       setEnCours(false);
+    }
+  };
+
+  // RG33 : ajout d'une option de personnalisation sur-mesure au devis
+  // (uniquement possible tant qu'il n'est pas validé — RG16).
+  const gererAjoutOption = async (evenement) => {
+    evenement.preventDefault();
+    if (!nouvelleOption.libelle.trim()) return;
+    setOptionEnCours(true);
+    setErreur("");
+    try {
+      await creerOptionDevis({
+        devis: commande.devis.id,
+        libelle: nouvelleOption.libelle,
+        description: nouvelleOption.description || "",
+        surcout_matiere: nouvelleOption.surcout_matiere || null,
+        surcout_operation: nouvelleOption.surcout_operation || null,
+      });
+      afficherSucces("Option ajoutée au devis.");
+      setNouvelleOption({ libelle: "", description: "", surcout_matiere: "", surcout_operation: "" });
+      setAfficherFormOption(false);
+      charger();
+    } catch (err) {
+      const donnees = err.response?.data;
+      setErreur(donnees ? JSON.stringify(donnees) : "Impossible d'ajouter cette option.");
+    } finally {
+      setOptionEnCours(false);
+    }
+  };
+
+  const gererSuppressionOption = async (optionId) => {
+    setErreur("");
+    try {
+      await supprimerOptionDevis(optionId);
+      afficherSucces("Option retirée du devis.");
+      charger();
+    } catch (err) {
+      const donnees = err.response?.data;
+      setErreur(donnees ? JSON.stringify(donnees) : "Impossible de retirer cette option.");
     }
   };
 
@@ -255,9 +310,20 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                   Voir le dossier de fabrication
                 </Button>
               ) : commande.statut === "VALIDEE" ? (
-                <Button variant="contained" fullWidth onClick={() => setConfirmationCreationDossier(true)} disabled={enCours}>
-                  Créer le dossier de fabrication
-                </Button>
+                <Box>
+                  <Button variant="contained" fullWidth onClick={() => setConfirmationCreationDossier(true)} disabled={enCours}>
+                    Créer le dossier de fabrication
+                  </Button>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", textAlign: "center", mt: 0.75 }}
+                  >
+                    Normalement généré automatiquement à la validation du devis
+                    (RG4, RG5) — à utiliser uniquement si cette génération
+                    automatique a échoué (ex. aucun atelier configuré).
+                  </Typography>
+                </Box>
               ) : (
                 <Box>
                   <Button variant="contained" fullWidth disabled>
@@ -434,9 +500,19 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                 <LigneInfo libelle="Prix de vente" valeur={`${devis.prix_vente} Ar`} />
                 <LigneInfo libelle="Durée de production" valeur={`${devis.duree_production} j`} />
                 <LigneInfo
+                  libelle="Date du devis"
+                  valeur={devis.date_devis ? new Date(devis.date_devis).toLocaleDateString("fr-FR") : "—"}
+                />
+                <LigneInfo
                   libelle="Statut"
                   valeur={devis.valide ? "Validé" : "En attente de validation"}
                 />
+                {devis.options_ajustees && Object.keys(devis.options_ajustees).length > 0 && (
+                  <LigneInfo
+                    libelle="Options ajustées (legacy)"
+                    valeur={JSON.stringify(devis.options_ajustees)}
+                  />
+                )}
 
                 {devis.pluriannuel && (
                   <>
@@ -485,6 +561,31 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                           <Typography variant="caption" sx={{ display: "block", mt: 0.5, fontStyle: "italic" }}>
                             Remarque (RG30) : {l.remarque}
                           </Typography>
+                        )}
+
+                        {/* RG39 : détail matière/opération copié depuis le catalogue à la
+                            création du devis — calculé côté serveur mais jusqu'ici jamais
+                            restitué à l'écran. */}
+                        {(devis.lignes_matiere_detail?.some((m) => m.ligne_devis === l.id) ||
+                          devis.lignes_operation_detail?.some((o) => o.ligne_devis === l.id)) && (
+                          <Box sx={{ mt: 1, pl: 1, borderLeft: "2px solid", borderColor: "divider" }}>
+                            {devis.lignes_matiere_detail
+                              ?.filter((m) => m.ligne_devis === l.id)
+                              .map((m) => (
+                                <Typography key={`m-${m.id}`} variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                  Matière — {m.article_designation} : {m.quantite_estimee} {m.unite || ""}
+                                  {" "}({Number(m.cout_estime).toLocaleString("fr-FR")} Ar)
+                                </Typography>
+                              ))}
+                            {devis.lignes_operation_detail
+                              ?.filter((o) => o.ligne_devis === l.id)
+                              .map((o) => (
+                                <Typography key={`o-${o.id}`} variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                                  Opération {o.ordre_execution} — {o.poste_nom} : {o.temps_estime} min
+                                  {" "}({Number(o.cout_estime).toLocaleString("fr-FR")} Ar)
+                                </Typography>
+                              ))}
+                          </Box>
                         )}
                       </Box>
                     ))}
@@ -562,6 +663,121 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                     <LigneInfo libelle="Prix prédit" valeur={`${estimation.prix_predit} Ar`} />
                     <LigneInfo libelle="Durée prédite" valeur={`${estimation.duree_predite} j`} />
                     <LigneInfo libelle="Version du modèle" valeur={estimation.version_modele} />
+                    <LigneInfo libelle="Méthode" valeur={estimation.methode || "—"} />
+                    <LigneInfo
+                      libelle="Score de confiance"
+                      valeur={estimation.score_confiance != null ? `${estimation.score_confiance}` : "—"}
+                    />
+                    <LigneInfo
+                      libelle="Date de l'estimation"
+                      valeur={estimation.date_estimation ? new Date(estimation.date_estimation).toLocaleString("fr-FR") : "—"}
+                    />
+                  </>
+                )}
+
+                {/* RG33 : options de personnalisation sur-mesure du devis — jusqu'ici
+                    calculées et exposées par l'API sans aucune interface. */}
+                <Divider sx={{ my: 1.5 }} />
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Options de personnalisation (RG33)
+                </Typography>
+                {devis.options?.length > 0 ? (
+                  devis.options.map((o) => (
+                    <Box
+                      key={o.id}
+                      sx={{
+                        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                        mb: 1, p: 1, borderRadius: 1, border: "1px solid", borderColor: "divider",
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{o.libelle}</Typography>
+                        {o.description && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                            {o.description}
+                          </Typography>
+                        )}
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          Surcoût matière : {o.surcout_matiere ? `${Number(o.surcout_matiere).toLocaleString("fr-FR")} Ar` : "—"}
+                          {" — "}
+                          Surcoût opération : {o.surcout_operation ? `${Number(o.surcout_operation).toLocaleString("fr-FR")} Ar` : "—"}
+                          {" — "}
+                          Total : {Number(o.surcout_total).toLocaleString("fr-FR")} Ar
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                          Ajoutée le {new Date(o.date_ajout).toLocaleDateString("fr-FR")}
+                        </Typography>
+                      </Box>
+                      {!devis.valide && peutGererDevis && (
+                        <IconButton size="small" onClick={() => gererSuppressionOption(o.id)}>
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                  ))
+                ) : (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                    Aucune option de personnalisation pour ce devis.
+                  </Typography>
+                )}
+
+                {!devis.valide && peutGererDevis && (
+                  <>
+                    <Button
+                      size="small"
+                      onClick={() => setAfficherFormOption((v) => !v)}
+                      startIcon={<AddCircleOutlinedIcon fontSize="small" />}
+                    >
+                      {afficherFormOption ? "Annuler" : "Ajouter une option"}
+                    </Button>
+                    {afficherFormOption && (
+                      <Box
+                        component="form"
+                        onSubmit={gererAjoutOption}
+                        sx={{ mt: 1, p: 1.5, bgcolor: "action.hover", borderRadius: 1.5 }}
+                      >
+                        <TextField
+                          label="Libellé (ex. Pelliculage mat)"
+                          size="small"
+                          fullWidth
+                          margin="dense"
+                          value={nouvelleOption.libelle}
+                          onChange={(e) => setNouvelleOption((v) => ({ ...v, libelle: e.target.value }))}
+                          required
+                        />
+                        <TextField
+                          label="Description"
+                          size="small"
+                          fullWidth
+                          margin="dense"
+                          value={nouvelleOption.description}
+                          onChange={(e) => setNouvelleOption((v) => ({ ...v, description: e.target.value }))}
+                        />
+                        <Stack direction="row" spacing={2}>
+                          <TextField
+                            label="Surcoût matière (Ar)"
+                            type="number"
+                            size="small"
+                            margin="dense"
+                            fullWidth
+                            value={nouvelleOption.surcout_matiere}
+                            onChange={(e) => setNouvelleOption((v) => ({ ...v, surcout_matiere: e.target.value }))}
+                          />
+                          <TextField
+                            label="Surcoût opération (Ar)"
+                            type="number"
+                            size="small"
+                            margin="dense"
+                            fullWidth
+                            value={nouvelleOption.surcout_operation}
+                            onChange={(e) => setNouvelleOption((v) => ({ ...v, surcout_operation: e.target.value }))}
+                          />
+                        </Stack>
+                        <Button type="submit" size="small" variant="outlined" sx={{ mt: 1 }} disabled={optionEnCours}>
+                          {optionEnCours ? "Ajout..." : "Ajouter"}
+                        </Button>
+                      </Box>
+                    )}
                   </>
                 )}
 
@@ -586,7 +802,7 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
       <ConfirmDialog
         ouvert={confirmationValidationDevis}
         titre="Valider ce devis ?"
-        message="La commande passera au statut « Validée » et pourra recevoir un dossier de fabrication (RG5)."
+        message="La commande passera au statut « Validée » et un dossier de fabrication sera généré automatiquement, avec affectation d'atelier et réservation des matières nécessaires (RG4, RG5, RG8, RG34)."
         icone={<FactCheckIcon sx={{ fontSize: 24 }} />}
         couleur="success"
         texteConfirmer="Valider"

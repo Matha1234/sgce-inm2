@@ -14,6 +14,7 @@ Bounded context : Referentiel & Catalogue (BC1, memoire section 5.8.1).
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -79,6 +80,7 @@ class Produit(models.Model):
     )
     marge_max = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal("30"),
+        validators=[MinValueValidator(Decimal("0"))],
         help_text="Marge maximale acceptable (en %) — RG36.",
     )
     date_maj = models.DateTimeField(
@@ -94,6 +96,14 @@ class Produit(models.Model):
 
     def __str__(self):
         return f"{self.nom} ({self.famille.get_nom_display()})"
+
+    def clean(self):
+        if self.marge_min is not None and self.marge_min < 0:
+            raise ValidationError({"marge_min": "La marge minimale ne peut pas être négative."})
+        if self.marge_max is not None and self.marge_max < 0:
+            raise ValidationError({"marge_max": "La marge maximale ne peut pas être négative."})
+        if self.marge_min is not None and self.marge_max is not None and self.marge_min > self.marge_max:
+            raise ValidationError({"marge_max": "La marge maximale doit être supérieure ou égale à la marge minimale (RG36)."})
 
     def calculer_prix_revient(self, quantite):
         """
@@ -258,7 +268,7 @@ class LigneMatierePremiere(models.Model):
         "commandes.Article", on_delete=models.PROTECT, related_name="lignes_catalogue"
     )
     quantite_unitaire = models.DecimalField(
-        max_digits=10, decimal_places=3,
+        max_digits=10, decimal_places=3, validators=[MinValueValidator(Decimal("0.001"))],
         help_text="Quantité de matière requise par exemplaire produit (ou par lot pour une charge fixe).",
     )
     type_charge = models.CharField(
@@ -303,7 +313,7 @@ class LigneOperation(models.Model):
         help_text="Ex. impression recto/verso, pliage, piquage, assemblage.",
     )
     temps_unitaire = models.DecimalField(
-        max_digits=8, decimal_places=2,
+        max_digits=8, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))],
         help_text="Temps requis par exemplaire produit (ou par lot pour une charge fixe), en minutes.",
     )
     type_charge = models.CharField(

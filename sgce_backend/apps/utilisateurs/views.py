@@ -83,8 +83,9 @@ class DemandeReinitialisationMotDePasseView(APIView):
     POST /api/auth/mot-de-passe-oublie/
     Corps attendu : { "email": "..." }
 
-    Valide directement l'adresse email : si aucun compte actif ne lui est
-    associé, la demande est refusée immédiatement (404). Sinon, un email
+    Accepte toute adresse email. Si un compte actif correspondant existe,
+    un email est envoyé ; sinon la même réponse générique est renvoyée pour
+    éviter de révéler l'existence d'un compte.
     HTML contenant un bouton de réinitialisation est envoyé au titulaire
     du compte.
     """
@@ -99,18 +100,16 @@ class DemandeReinitialisationMotDePasseView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            utilisateur = (
-                Utilisateur.objects.filter(email__iexact=email, is_active=True)
-                .order_by("id")
-                .first()
-            )
-            if utilisateur is None:
-                raise Utilisateur.DoesNotExist
-        except Utilisateur.DoesNotExist:
+        utilisateur = (
+            Utilisateur.objects.filter(email__iexact=email, is_active=True)
+            .order_by("id")
+            .first()
+        )
+
+        if utilisateur is None:
             return Response(
-                {"email": "Aucun compte actif n'est associé à cette adresse email."},
-                status=status.HTTP_404_NOT_FOUND,
+                {"detail": "Si un compte correspond à cette adresse, un email de réinitialisation sera envoyé."},
+                status=status.HTTP_200_OK,
             )
 
         token = default_token_generator.make_token(utilisateur)
