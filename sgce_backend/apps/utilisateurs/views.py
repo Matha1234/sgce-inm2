@@ -244,16 +244,12 @@ class UtilisateurListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdmin]
 
 
-class UtilisateurDetailView(generics.RetrieveUpdateAPIView):
+class UtilisateurDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET/PATCH/PUT /api/utilisateurs/<id>/ (Administrateur uniquement)
+    GET/PATCH/PUT/DELETE /api/utilisateurs/<id>/ (Administrateur uniquement)
 
-    La "suppression" d'un compte se fait par desactivation (is_active=False)
-    plutot que par suppression definitive, afin de conserver l'historique
-    des objets rattaches (commandes creees, devis valides, atelier dirige...).
-
-    Garde-fou : un Administrateur ne peut pas desactiver son propre compte
-    (evite de perdre accidentellement tout acces administrateur).
+    Garde-fou : un Administrateur ne peut pas désactiver ni supprimer
+    son propre compte (évite de perdre accidentellement tout accès admin).
     """
 
     queryset = Utilisateur.objects.all()
@@ -269,3 +265,8 @@ class UtilisateurDetailView(generics.RetrieveUpdateAPIView):
         if desactivation_de_soi:
             raise PermissionDenied("Vous ne pouvez pas désactiver votre propre compte.")
         serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.pk == self.request.user.pk:
+            raise PermissionDenied("Vous ne pouvez pas supprimer votre propre compte.")
+        instance.delete()

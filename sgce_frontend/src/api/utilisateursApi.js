@@ -35,3 +35,6 @@ export const mettreAJourPhotoProfil = (fichier) => {
 };
 export const changerMotDePasse = (donnees) =>
   axiosClient.post("/auth/changer-mot-de-passe/", donnees).then((r) => r.data);
+
+export const supprimerUtilisateur = (id) =>
+  axiosClient.delete(`/utilisateurs/${id}/`).then((r) => r.data);

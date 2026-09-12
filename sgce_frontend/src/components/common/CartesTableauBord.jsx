@@ -88,31 +88,87 @@ export function CarteDonutLegende({ titre, segments }) {
   );
 }
 
-// Paires de petites barres verticales comparant plusieurs groupes (ex.
-// charge par atelier).
+// Paires de barres horizontales comparant charge vs capacité par atelier
 export function CarteComparaisonBarres({ titre, groupes }) {
-  const HAUTEUR = 84;
+  if (!groupes || groupes.length === 0) {
+    return (
+      <Box sx={{ width: "100%", py: 2, textAlign: "center" }}>
+        <Typography variant="body2" color="text.secondary">
+          Aucun atelier à afficher.
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
-    <Card sx={{ height: "100%", boxShadow: 1 }}>
-      <CardContent>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, textAlign: "center" }}>{titre}</Typography>
-        <Stack direction="row" spacing={3} justifyContent="center" alignItems="flex-end">
-          {groupes.map((g) => (
-            <Stack key={g.label} spacing={1} alignItems="center">
-              <Stack direction="row" spacing={0.75} alignItems="flex-end" sx={{ height: HAUTEUR }}>
-                {g.valeurs.map((v) => (
-                  <Stack key={v.label} alignItems="center" spacing={0.5} sx={{ height: "100%", justifyContent: "flex-end" }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: v.couleur, fontSize: 10.5 }}>{v.pourcentage}%</Typography>
-                    <Box sx={{ width: 14, borderRadius: 1, height: `${Math.max(4, v.pourcentage)}%`, bgcolor: v.couleur }} />
-                  </Stack>
-                ))}
-              </Stack>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>{g.label}</Typography>
+    <Box sx={{ width: "100%" }}>
+      {titre && (
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, textAlign: "center" }}>
+          {titre}
+        </Typography>
+      )}
+
+      <Stack spacing={2}>
+        {groupes.map((g) => (
+          <Box
+            key={g.label}
+            sx={{
+              p: 1.5,
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "background.paper"
+            }}
+          >
+            {/* Nom de l'atelier + chef */}
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ fontWeight: 750 }}>
+                {g.label}
+              </Typography>
+              {g.chef && (
+                <Typography variant="caption" color="text.secondary">
+                  Chef : {g.chef}
+                </Typography>
+              )}
             </Stack>
-          ))}
-        </Stack>
-      </CardContent>
-    </Card>
+
+            {/* Barres de comparaison */}
+            <Stack spacing={1}>
+              {g.valeurs.map((v) => (
+                <Box key={v.label}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.4 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: v.couleur }}>
+                      {v.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {v.detail || `${v.pourcentage}%`}
+                    </Typography>
+                  </Stack>
+                  <Box
+                    sx={{
+                      height: 8,
+                      borderRadius: 1,
+                      bgcolor: alpha(v.couleur, 0.12),
+                      overflow: "hidden"
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(0, v.pourcentage))}%`,
+                        bgcolor: v.couleur,
+                        borderRadius: 1,
+                        transition: "width .3s ease"
+                      }}
+                    />
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+    </Box>
   );
 }
 

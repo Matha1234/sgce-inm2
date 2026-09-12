@@ -341,21 +341,26 @@ export default function DashboardHomePage() {
   }, [dossiers, ateliers]);
 
   const ateliersComparaison = useMemo(() =>
-    chargeParAtelier.map(a => ({
-      label: a.atelier,
-      valeurs: [
-        {
-          label: "Charge",
-          pourcentage: a.total ? Math.round(a.enCours / a.total * 100) : 0,
-          couleur: "#1565c0"
-        },
-        ...(a.capacite ? [{
-          label: "Capacité",
-          pourcentage: Math.min(150, Math.round(a.total / a.capacite * 100)),
-          couleur: "#6a1b9a"
-        }] : [])
-      ]
-    })), [chargeParAtelier]);
+  chargeParAtelier.map(a => ({
+    label: a.atelier,
+    chef: a.chefAtelierNom || null,
+    valeurs: [
+      {
+        label: "En cours",
+        pourcentage: a.total ? Math.round((a.enCours / a.total) * 100) : 0,
+        couleur: "#1565c0",
+        detail: `${a.enCours} / ${a.total} dossiers`
+      },
+      ...(a.capacite
+        ? [{
+            label: "Capacité",
+            pourcentage: Math.min(100, Math.round((a.total / a.capacite) * 100)),
+            couleur: "#6a1b9a",
+            detail: `${a.total} / ${a.capacite} (capacité)`
+          }]
+        : [])
+    ]
+  })), [chargeParAtelier]);
 
   const rentabiliteSegments = useMemo(() =>
     rentabilite ? [
@@ -542,7 +547,7 @@ export default function DashboardHomePage() {
         </Col>
         <Col size={{ xs: 12, md: 8 }} minHeight={320}>
           {panneau("Charge par atelier", "En cours vs capacité",
-            <CarteComparaisonBarres titre="Charge par atelier" groupes={ateliersComparaison} />)}
+            <CarteComparaisonBarres titre="" groupes={ateliersComparaison} />)}
         </Col>
         <Col size={{ xs: 12 }} minHeight={180}>
           {panneau("Pilotage", "Accès direct",
