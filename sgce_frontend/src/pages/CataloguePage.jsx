@@ -636,8 +636,14 @@ export default function CataloguePage() {
                             <Typography variant="caption" color="text.disabled">Aucune opération définie.</Typography>
                           ) : (
                             (composant.lignes_operation || []).map((l) => (
-                              <Stack key={l.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                                <Box sx={{ minWidth: 0 }}>
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="flex-start"
+                                spacing={1}
+                                sx={{ width: "100%" }}
+                              >
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
                                   <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.libelle}</Typography>
                                   <Typography variant="caption" color="text.secondary">
                                     {l.poste_nom} · {l.temps_unitaire} min/ex · {LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge}
@@ -648,7 +654,12 @@ export default function CataloguePage() {
                                     </Typography>
                                   )}
                                 </Box>
-                                <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)}
+                                  sx={{ flexShrink: 0, ml: "auto" }}
+                                >
                                   <DeleteOutlineIcon fontSize="small" />
                                 </IconButton>
                               </Stack>
