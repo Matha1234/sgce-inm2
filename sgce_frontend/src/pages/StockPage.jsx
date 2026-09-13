@@ -38,7 +38,17 @@ const LIBELLES_PAPIER = {
 };
 
 const LIBELLES_MOUVEMENT = { ENTREE: "Entrée", SORTIE: "Sortie", RESERVATION: "Réservation" };
-const COULEURS_MOUVEMENT = { ENTREE: "success", SORTIE: "warning", RESERVATION: "info" };
+
+const COULEUR_TEXTE_MOUVEMENT = {
+  ENTREE: "success.main",
+  SORTIE: "warning.main",
+  RESERVATION: "info.main",
+};
+
+const COULEUR_TEXTE_ETAT = {
+  alerte: "error.main",
+  normal: "success.main",
+};
 
 const ARTICLE_VIDE = {
   designation: "", emplacement_stock: "", classe_comptable: "CLASSE_6", type_papier: "NON_APPLICABLE",
@@ -62,7 +72,6 @@ export default function StockPage() {
   const [page, setPage] = useState(0);
   const [surPage, setSurPage] = useState(5);
 
-  // Pagination indépendante pour l'historique des mouvements
   const [pageMouvements, setPageMouvements] = useState(0);
   const [surPageMouvements, setSurPageMouvements] = useState(5);
 
@@ -105,7 +114,6 @@ export default function StockPage() {
     );
   }, [articles, recherche]);
 
-  // Tri par colonne (articles puis mouvements) + page courante
   const { cleTri, directionTri, gererTri, donneesTriees: articlesTries } = useTriTableau(articlesFiltres);
   const { cleTriMouvements, directionTriMouvements, gererTriMouvements, donneesTriees: mouvementsTries } = useTriTableau(mouvements);
   const articlesPaginees = useMemo(
@@ -117,8 +125,6 @@ export default function StockPage() {
     [mouvementsTries, pageMouvements, surPageMouvements]
   );
 
-  // Cadres mesurés : exactement l'en-tête + 5 lignes, sans barre de
-  // défilement à 5 entrées ; elle apparaît dès qu'on augmente l'affichage.
   const refCadreArticles = useRef(null);
   const hauteurCadreArticles = useHauteurCinqLignes(refCadreArticles, articlesPaginees.length);
   const refCadreMouvements = useRef(null);
@@ -128,7 +134,6 @@ export default function StockPage() {
 
   const gererRecherche = (valeur) => { setRecherche(valeur); setPage(0); };
 
-  // --- Fiche article ---
   const ouvrirCreationArticle = () => {
     setArticleEnEdition(null);
     setFormulaireArticle(ARTICLE_VIDE);
@@ -171,7 +176,6 @@ export default function StockPage() {
     } finally { setEnCoursArticle(false); }
   };
 
-  // --- Mouvement de stock ---
   const ouvrirDialogueMouvement = async (article) => {
     setArticleSelectionne(article);
     setTypeMouvement("ENTREE");
@@ -184,7 +188,6 @@ export default function StockPage() {
   const gererMouvement = async () => {
     setConfirmationMouvement(false);
     if (!quantiteMouvement || Number(quantiteMouvement) <= 0) return;
-    // RG8 / serializer : une SORTIE doit être rattachée à un dossier.
     if (typeMouvement === "SORTIE" && !dossierMouvementId) {
       setErreur("Une sortie physique doit être rattachée à un dossier de fabrication.");
       return;
@@ -314,76 +317,191 @@ export default function StockPage() {
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}><CircularProgress /></Box>
       ) : (
         <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-          {/* --- Tableau des articles --- */}
           <TableContainer ref={refCadreArticles} sx={{ maxHeight: hauteurCadreArticles ?? 320, overflow: "auto" }}>
-            <Table stickyHeader size="small">
+                        <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center" sx={{ width: 48, ...STYLE_EN_TETE }}>#</TableCell>
-                  <EnTeteTriable cle="designation" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Article</EnTeteTriable>
-                  <EnTeteTriable cle="classe_comptable" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Classe comptable</EnTeteTriable>
-                  <EnTeteTriable cle="unite" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Unité</EnTeteTriable>
-                  <EnTeteTriable cle="cout_unitaire" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Coût unitaire</EnTeteTriable>
-                  <EnTeteTriable cle="quantite_stock" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Stock actuel</EnTeteTriable>
-                  <EnTeteTriable cle="seuil_securite" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Seuil sécurité</EnTeteTriable>
+                  <EnTeteTriable
+                    cle="designation"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Article
+                  </EnTeteTriable>
+                  <EnTeteTriable
+                    cle="classe_comptable"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Classe comptable
+                  </EnTeteTriable>
+                  <EnTeteTriable
+                    cle="unite"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Unité
+                  </EnTeteTriable>
+                  <EnTeteTriable
+                    cle="cout_unitaire"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Coût unitaire
+                  </EnTeteTriable>
+                  <EnTeteTriable
+                    cle="quantite_stock"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Stock actuel
+                  </EnTeteTriable>
+                  <EnTeteTriable
+                    cle="seuil_securite"
+                    align="center"
+                    cleTri={cleTri}
+                    directionTri={directionTri}
+                    onTri={gererTri}
+                  >
+                    Seuil sécurité
+                  </EnTeteTriable>
                   <TableCell align="center" sx={STYLE_EN_TETE}>État</TableCell>
-                  {peutGererStock && <TableCell align="center" sx={STYLE_EN_TETE}>Actions</TableCell>}
+                  {peutGererStock && (
+                    <TableCell align="center" sx={STYLE_EN_TETE}>Actions</TableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {articlesPaginees.map((article, index) => {
-                  const disponible = Number(article.quantite_disponible ?? (Number(article.quantite_stock) - Number(article.quantite_reservee || 0)));
-                  const enAlerte = article.est_en_alerte ?? (disponible <= Number(article.seuil_securite));
+                {articlesPaginees.map((article) => {
+                  const disponible = Number(
+                    article.quantite_disponible
+                    ?? (Number(article.quantite_stock) - Number(article.quantite_reservee || 0))
+                  );
+                  const enAlerte =
+                    article.est_en_alerte
+                    ?? (disponible <= Number(article.seuil_securite));
+
                   return (
-                    <TableRow key={article.id} hover sx={{
-                      "&:last-child td": { borderBottom: 0 },
-                      "&:nth-of-type(even)": { bgcolor: "background.default" },
-                    }}>
+                    <TableRow
+                      key={article.id}
+                      hover
+                      sx={{ "&:last-child td": { borderBottom: 0 } }}
+                    >
+                      {/* Article — données complètes */}
                       <TableCell align="center">
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                          {page * surPage + index + 1}
+                        <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.35 }}>
+                          {article.designation}
                         </Typography>
-                      </TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600 }}>
-                        {article.designation}
                         {article.emplacement_stock && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontWeight: 400 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block", mt: 0.25, lineHeight: 1.35 }}
+                          >
                             {article.emplacement_stock}
                           </Typography>
                         )}
                         {(article.type_encre || article.type_film) && (
-                          <Typography variant="caption" color="text.disabled" sx={{ display: "block", fontWeight: 400 }}>
-                            {[article.type_encre && `Encre : ${article.type_encre}`, article.type_film && `Film : ${article.type_film}`]
-                              .filter(Boolean).join(" — ")}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block", mt: 0.15, lineHeight: 1.35 }}
+                          >
+                            {[
+                              article.type_encre && `Encre : ${article.type_encre}`,
+                              article.type_film && `Film : ${article.type_film}`,
+                            ].filter(Boolean).join(" — ")}
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell align="center">{LIBELLES_CLASSE[article.classe_comptable] || article.classe_comptable}</TableCell>
-                      <TableCell align="center">{article.unite}</TableCell>
-                      <TableCell align="center">{Number(article.cout_unitaire).toLocaleString("fr-FR")} Ar</TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 600 }}>
-                        {Number(article.quantite_stock).toLocaleString("fr-FR")}
-                        {Number(article.quantite_reservee || 0) > 0 && (
-                          <Typography component="span" variant="caption" color="text.secondary" display="block">
-                            réservé {Number(article.quantite_reservee).toLocaleString("fr-FR")} · dispo {disponible.toLocaleString("fr-FR")}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="center">{Number(article.seuil_securite).toLocaleString("fr-FR")}</TableCell>
+
+                      {/* Classe comptable — libellé complet */}
                       <TableCell align="center">
-                        <Chip label={enAlerte ? "Stock bas" : "Normal"}
-                          color={enAlerte ? "error" : "success"} size="small" sx={{ fontWeight: 600 }} />
+                        <Typography variant="body2" sx={{ lineHeight: 1.35 }}>
+                          {LIBELLES_CLASSE[article.classe_comptable] || article.classe_comptable}
+                        </Typography>
                       </TableCell>
+
+                      {/* Unité */}
+                      <TableCell align="center">
+                        <Typography variant="body2">{article.unite}</Typography>
+                      </TableCell>
+
+                      {/* Coût unitaire */}
+                      <TableCell align="center">
+                        <Typography variant="body2">
+                          {Number(article.cout_unitaire).toLocaleString("fr-FR")} Ar
+                        </Typography>
+                      </TableCell>
+
+                      {/* Stock actuel — quantités complètes */}
+                      <TableCell align="center">
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {Number(article.quantite_stock).toLocaleString("fr-FR")}
+                        </Typography>
+                        {Number(article.quantite_reservee || 0) > 0 && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block", mt: 0.25, lineHeight: 1.35 }}
+                          >
+                            réservé {Number(article.quantite_reservee).toLocaleString("fr-FR")}
+                            {" · "}
+                            disponible {disponible.toLocaleString("fr-FR")}
+                          </Typography>
+                        )}
+                      </TableCell>
+
+                      {/* Seuil sécurité */}
+                      <TableCell align="center">
+                        <Typography variant="body2">
+                          {Number(article.seuil_securite).toLocaleString("fr-FR")}
+                        </Typography>
+                      </TableCell>
+
+                      {/* État */}
+                      <TableCell align="center">
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            color: enAlerte
+                              ? COULEUR_TEXTE_ETAT.alerte
+                              : COULEUR_TEXTE_ETAT.normal,
+                          }}
+                        >
+                          {enAlerte ? "Stock bas" : "Normal"}
+                        </Typography>
+                      </TableCell>
+
+                      {/* Actions */}
                       {peutGererStock && (
                         <TableCell align="center">
                           <Stack direction="row" spacing={0.5} justifyContent="center">
                             <Tooltip title="Mouvement d'entrée / sortie">
-                              <IconButton size="small" color="primary" onClick={() => ouvrirDialogueMouvement(article)}>
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => ouvrirDialogueMouvement(article)}
+                              >
                                 <SwapVertIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Modifier la fiche article">
-                              <IconButton size="small" onClick={() => ouvrirModificationArticle(article)}>
+                              <IconButton
+                                size="small"
+                                onClick={() => ouvrirModificationArticle(article)}
+                              >
                                 <EditOutlinedIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
@@ -395,8 +513,14 @@ export default function StockPage() {
                 })}
                 {articlesPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={peutGererStock ? 9 : 8} align="center" sx={{ py: 5, color: "text.secondary" }}>
-                      {recherche ? "Aucun article ne correspond à votre recherche." : "Aucun article enregistré."}
+                    <TableCell
+                      colSpan={peutGererStock ? 8 : 7}
+                      align="center"
+                      sx={{ py: 5, color: "text.secondary" }}
+                    >
+                      {recherche
+                        ? "Aucun article ne correspond à votre recherche."
+                        : "Aucun article enregistré."}
                     </TableCell>
                   </TableRow>
                 )}
@@ -404,7 +528,6 @@ export default function StockPage() {
             </Table>
           </TableContainer>
 
-          {/* Pagination fixe */}
           {articlesFiltres.length > 0 && (
             <PaginationBar
               compte={articlesFiltres.length}
@@ -415,7 +538,6 @@ export default function StockPage() {
             />
           )}
 
-          {/* --- Séparateur + Historique des mouvements --- */}
           <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
             <Stack direction="row" alignItems="center" spacing={1.25}
               sx={{ px: 2, py: 1, bgcolor: "background.default" }}>
@@ -443,10 +565,17 @@ export default function StockPage() {
                     }}>
                       <TableCell align="center" sx={{ py: 0.6 }}>{new Date(mouvement.date_mouvement).toLocaleString("fr-FR")}</TableCell>
                       <TableCell align="center" sx={{ py: 0.6 }}>{mouvement.article_designation}</TableCell>
+                      {/* Type : texte coloré, sans cadre */}
                       <TableCell align="center" sx={{ py: 0.6 }}>
-                        <Chip label={LIBELLES_MOUVEMENT[mouvement.type_mouvement] || mouvement.type_mouvement}
-                          color={COULEURS_MOUVEMENT[mouvement.type_mouvement] || "default"}
-                          size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            color: COULEUR_TEXTE_MOUVEMENT[mouvement.type_mouvement] || "text.primary",
+                          }}
+                        >
+                          {LIBELLES_MOUVEMENT[mouvement.type_mouvement] || mouvement.type_mouvement}
+                        </Typography>
                       </TableCell>
                       <TableCell align="center" sx={{ fontWeight: 600, py: 0.6 }}>
                         {Number(mouvement.quantite).toLocaleString("fr-FR")}
@@ -457,7 +586,7 @@ export default function StockPage() {
                   ))}
                   {mouvements.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: 3, color: "text.secondary" }}>
                         Aucun mouvement enregistré pour le moment.
                       </TableCell>
                     </TableRow>
@@ -478,7 +607,6 @@ export default function StockPage() {
         </Paper>
       )}
 
-      {/* Modale : fiche article */}
       <Dialog open={dialogueArticleOuvert} onClose={() => setDialogueArticleOuvert(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {articleEnEdition ? "Modifier l'article" : "Nouvel article de stock"}
@@ -534,7 +662,6 @@ export default function StockPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Modale : mouvement de stock */}
       <Dialog open={dialogueMouvementOuvert} onClose={() => setDialogueMouvementOuvert(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           Mouvement de stock — {articleSelectionne?.designation}
@@ -577,7 +704,6 @@ export default function StockPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialogue : confirmation du mouvement de stock */}
       <ConfirmDialog
         ouvert={confirmationMouvement}
         titre={

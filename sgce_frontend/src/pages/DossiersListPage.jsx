@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Chip, CircularProgress, IconButton, MenuItem, Paper,
+  Alert, Box, CircularProgress, IconButton, MenuItem, Paper,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
@@ -19,13 +19,12 @@ import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
 import BoutonExport from "../components/common/BoutonExport";
 
-const COULEURS_STATUT_PRODUCTION = {
-  CREE: "default",
-  EN_COURS: "warning",
-  TERMINE: "success",
+const COULEUR_TEXTE_STATUT_PRODUCTION = {
+  CREE: "text.secondary",
+  EN_COURS: "warning.main",
+  TERMINE: "success.main",
 };
 
-// Options du filtre de statut — liste déroulante professionnelle
 const OPTIONS_STATUT = [
   { code: "", libelle: "Tous" },
   { code: "CREE", libelle: "Créé" },
@@ -67,7 +66,6 @@ export default function DossiersListPage() {
     });
   }, [dossiers, recherche, filtreStatut]);
 
-  // Compteurs par statut pour le filtre déroulant (ex. « En cours (3) »)
   const comptesStatut = useMemo(() => {
     const c = { "": dossiers.length };
     OPTIONS_STATUT.forEach((o) => { if (o.code) c[o.code] = 0; });
@@ -75,15 +73,12 @@ export default function DossiersListPage() {
     return c;
   }, [dossiers]);
 
-  // Tri par colonne puis page courante tronquée à « surPage » lignes
   const { cleTri, directionTri, gererTri, donneesTriees } = useTriTableau(dossiersFiltres);
   const dossiersPaginees = useMemo(
     () => donneesTriees.slice(page * surPage, page * surPage + surPage),
     [donneesTriees, page, surPage]
   );
 
-  // Cadre mesuré : exactement l'en-tête + 5 lignes, sans barre de
-  // défilement à 5 entrées ; elle apparaît dès qu'on augmente l'affichage.
   const refCadre = useRef(null);
   const hauteurCadre = useHauteurCinqLignes(refCadre, dossiersPaginees.length);
 
@@ -94,7 +89,6 @@ export default function DossiersListPage() {
 
   return (
     <Box>
-      {/* En-tête de page centré avec pastille + titre */}
       <PageHeader
         icone={<PrecisionManufacturingIcon />}
         titre="Production"
@@ -106,7 +100,6 @@ export default function DossiersListPage() {
 
       {erreur && <Alert severity="error" sx={{ mb: 2 }}>{erreur}</Alert>}
 
-      {/* Filtres + recherche — liste déroulante de statut et barre sur la même ligne */}
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={1.5}
@@ -152,14 +145,18 @@ export default function DossiersListPage() {
             await e.exporterPDF({
               fichier: `Dossiers_${Date.now()}.pdf`,
               titre: "Liste des dossiers de fabrication",
-              sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : filtreStatut ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}` : "",
+              sousTitre: recherche
+                ? `Filtré : ${recherche}`
+                : filtreStatut
+                  ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}`
+                  : "",
               meta: e.metaEdition(dossiersFiltres.length),
               colonnes: [
-                e.colonne("N\u00b0 Dossier", "numero_dossier"),
+                e.colonne("N° Dossier", "numero_dossier"),
                 e.colonne("Commande", "commande_numero"),
                 e.colonne("Atelier", "atelier_nom", "left"),
                 e.colonnePerso("Statut", (d) => LIBELLES_STATUT_PRODUCTION[d.statut_production] || d.statut_production),
-                e.colonnePerso("Cr\u00e9\u00e9 le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
+                e.colonnePerso("Créé le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
               ],
               lignes: dossiersFiltres,
             });
@@ -169,15 +166,20 @@ export default function DossiersListPage() {
             await e.exporterExcel({
               fichier: `Dossiers_${Date.now()}.xlsx`,
               feuilles: [{
-                nom: "Dossiers", titre: "Liste des dossiers de fabrication",
-                sousTitre: recherche ? `Filtr\u00e9 : ${recherche}` : filtreStatut ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}` : "",
+                nom: "Dossiers",
+                titre: "Liste des dossiers de fabrication",
+                sousTitre: recherche
+                  ? `Filtré : ${recherche}`
+                  : filtreStatut
+                    ? `Statut : ${LIBELLES_STATUT_PRODUCTION[filtreStatut]}`
+                    : "",
                 meta: e.metaEdition(dossiersFiltres.length),
                 colonnes: [
-                  e.colonne("N\u00b0 Dossier", "numero_dossier"),
+                  e.colonne("N° Dossier", "numero_dossier"),
                   e.colonne("Commande", "commande_numero"),
                   e.colonne("Atelier", "atelier_nom", "left"),
                   e.colonnePerso("Statut", (d) => LIBELLES_STATUT_PRODUCTION[d.statut_production] || d.statut_production),
-                  e.colonnePerso("Cr\u00e9\u00e9 le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
+                  e.colonnePerso("Créé le", (d) => new Date(d.date_creation).toLocaleDateString("fr-FR")),
                 ],
                 lignes: dossiersFiltres,
               }],
@@ -198,30 +200,31 @@ export default function DossiersListPage() {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center" sx={{ width: 48, ...STYLE_EN_TETE }}>#</TableCell>
-                  <EnTeteTriable cle="numero_dossier" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>N° Dossier</EnTeteTriable>
-                  <EnTeteTriable cle="commande_numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Commande</EnTeteTriable>
-                  <EnTeteTriable cle="atelier_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Atelier</EnTeteTriable>
-                  <EnTeteTriable cle="statut_production" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Statut</EnTeteTriable>
-                  <EnTeteTriable cle="date_creation" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Créé le</EnTeteTriable>
+                  <EnTeteTriable cle="numero_dossier" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    N° Dossier
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="commande_numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Commande
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="atelier_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Atelier
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="statut_production" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Statut
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="date_creation" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Créé le
+                  </EnTeteTriable>
                   <TableCell align="center" sx={STYLE_EN_TETE}>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dossiersPaginees.map((dossier, index) => (
+                {dossiersPaginees.map((dossier) => (
                   <TableRow
                     key={dossier.id}
                     hover
-                    sx={{
-                      "&:last-child td": { borderBottom: 0 },
-                      "&:nth-of-type(even)": { bgcolor: "background.default" },
-                    }}
+                    sx={{ "&:last-child td": { borderBottom: 0 } }}
                   >
-                    <TableCell align="center">
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                        {page * surPage + index + 1}
-                      </Typography>
-                    </TableCell>
                     <TableCell align="center">
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {dossier.numero_dossier}
@@ -230,12 +233,15 @@ export default function DossiersListPage() {
                     <TableCell align="center">{dossier.commande_numero}</TableCell>
                     <TableCell align="center">{dossier.atelier_nom}</TableCell>
                     <TableCell align="center">
-                      <Chip
-                        label={LIBELLES_STATUT_PRODUCTION[dossier.statut_production] || dossier.statut_production}
-                        color={COULEURS_STATUT_PRODUCTION[dossier.statut_production] || "default"}
-                        size="small"
-                        sx={{ fontWeight: 600 }}
-                      />
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 700,
+                          color: COULEUR_TEXTE_STATUT_PRODUCTION[dossier.statut_production] || "text.primary",
+                        }}
+                      >
+                        {LIBELLES_STATUT_PRODUCTION[dossier.statut_production] || dossier.statut_production}
+                      </Typography>
                     </TableCell>
                     <TableCell align="center">
                       {new Date(dossier.date_creation).toLocaleDateString("fr-FR")}
@@ -246,7 +252,10 @@ export default function DossiersListPage() {
                           size="small"
                           component={Link}
                           to={`/dossiers/${dossier.id}`}
-                          sx={{ color: "primary.main", "&:hover": { bgcolor: (t) => alpha(t.palette.primary.main, 0.1) } }}
+                          sx={{
+                            color: "primary.main",
+                            "&:hover": { bgcolor: (t) => alpha(t.palette.primary.main, 0.1) },
+                          }}
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
@@ -256,7 +265,7 @@ export default function DossiersListPage() {
                 ))}
                 {dossiersPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       {recherche || filtreStatut
                         ? "Aucun dossier ne correspond à vos filtres."
                         : "Aucun dossier de fabrication pour le moment."}

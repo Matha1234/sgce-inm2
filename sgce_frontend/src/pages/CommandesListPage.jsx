@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent,
+  Alert, Box, Button, CircularProgress, Dialog, DialogContent,
   DialogTitle, IconButton, MenuItem, Paper, Stack, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, TextField, Tooltip,
   Typography,
@@ -10,15 +10,16 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import { alpha } from "@mui/material/styles";
+import { useSelector } from "react-redux";
 
 import { listerCommandes } from "../api/commandesApi";
 import { useNotifier } from "../components/common/Notifier";
 import {
-  COULEURS_STATUT_COMMANDE, LIBELLES_NATURE_COMMANDE, LIBELLES_STATUT_COMMANDE,
+  LIBELLES_NATURE_COMMANDE, LIBELLES_STATUT_COMMANDE,
 } from "../constants/roles";
 import {
   exporterPDF, exporterExcel, metaEdition,
-  colonne, colonnePerso, DATE_FR,
+  colonne, colonnePerso,
 } from "../utils/exportateur";
 import PageHeader from "../components/common/PageHeader";
 import SearchField from "../components/common/SearchField";
@@ -30,13 +31,26 @@ import { useHauteurCinqLignes } from "../utils/tableau";
 import NouvelleCommandeForm from "../components/commandes/NouvelleCommandeForm";
 import CommandeDetailContent from "../components/commandes/CommandeDetailContent";
 
-// Options du filtre de statut — liste déroulante professionnelle avec compteurs
+const COULEUR_TEXTE_STATUT = {
+  EN_ATTENTE: "text.secondary",
+  DEVIS: "info.main",
+  VALIDEE: "primary.main",
+  EN_PRODUCTION: "warning.main",
+  LIVREE: "success.main",
+  ANNULEE: "error.main",
+};
+
 const OPTIONS_STATUT = [
   { code: "", libelle: "Tous" },
   ...Object.entries(LIBELLES_STATUT_COMMANDE).map(([code, libelle]) => ({ code, libelle })),
 ];
 
 export default function CommandesListPage() {
+  const { utilisateur } = useSelector((s) => s.auth);
+  const role = utilisateur?.role;
+  const peutCreer = role === "ADMIN" || role === "AGENT_SDO";
+  const peutVoir = Boolean(role);
+
   const { afficherSucces } = useNotifier();
   const [commandes, setCommandes] = useState([]);
   const [chargement, setChargement] = useState(true);
@@ -75,7 +89,6 @@ export default function CommandesListPage() {
     });
   }, [commandes, recherche, filtreStatut]);
 
-  // Compteurs par statut pour le filtre déroulant (ex. « Validée (3) »)
   const comptesStatut = useMemo(() => {
     const c = { "": commandes.length };
     OPTIONS_STATUT.forEach((o) => { if (o.code) c[o.code] = 0; });
@@ -83,17 +96,17 @@ export default function CommandesListPage() {
     return c;
   }, [commandes]);
 
-  // Tri par colonne puis page courante tronquée à « surPage » lignes
   const { cleTri, directionTri, gererTri, donneesTriees } = useTriTableau(commandesFiltrees);
   const commandesPaginees = useMemo(
     () => donneesTriees.slice(page * surPage, page * surPage + surPage),
     [donneesTriees, page, surPage]
   );
 
-  // Cadre mesuré : exactement l'en-tête + 5 lignes, sans barre de
-  // défilement à 5 entrées ; elle apparaît dès qu'on augmente l'affichage.
   const refCadre = useRef(null);
   const hauteurCadre = useHauteurCinqLignes(refCadre, commandesPaginees.length);
+
+  // N'appliquer une hauteur max que s'il y a assez de lignes (évite le vide coloré en bas)
+  const cadrePlein = commandesPaginees.length >= 5;
 
   const gererRecherche = (valeur) => {
     setRecherche(valeur);
@@ -108,8 +121,7 @@ export default function CommandesListPage() {
   };
 
   return (
-    <Box>
-      {/* En-tête de page centré avec pastille + titre */}
+    <Box sx={{ pb: 4 }}>
       <PageHeader
         icone={<AssignmentIcon />}
         titre="Commandes"
@@ -119,32 +131,36 @@ export default function CommandesListPage() {
         titreVariant="h6"
       />
 
-      {erreur && <Alert severity="error" sx={{ mb: 2 }}>{erreur}</Alert>}
+      {erreur && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErreur("")}>
+          {erreur}
+        </Alert>
+      )}
 
-      {/* Barre de recherche + bouton « Nouvelle commande » — bouton au mur droit */}
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={1.5}
         alignItems="center"
-        sx={{ mb: 2, justifyContent: "space-between" }}
+        sx={{ mb: 2, justifyContent: "space-between", flexShrink: 0 }}
       >
         <SearchField
           valeur={recherche}
           onChange={(e) => gererRecherche(e.target.value)}
-          placeholder="Rechercher par numéro, organisme, atelier…"
-          largeur={400}
-          sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }}
+          placeholder="Rechercher par numéro, organisme ou atelier…"
+          largeur={320}
+          sx={{ mb: 0, flexGrow: 1, maxWidth: 360 }}
         />
+
         <TextField
           select
           size="small"
           label="Statut"
           value={filtreStatut}
           onChange={(e) => { setFiltreStatut(e.target.value); setPage(0); }}
-          sx={{ minWidth: 200, flexShrink: 0, "& .MuiInputBase-root": { fontSize: 13 } }}
+          sx={{ minWidth: 160, "& .MuiInputBase-root": { fontSize: 13 } }}
           slotProps={{
             select: {
-              renderValue: (v) => (
+              renderValue: () => (
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
                   {filtreStatut ? LIBELLES_STATUT_COMMANDE[filtreStatut] || filtreStatut : "Tous"}
                 </Typography>
@@ -161,6 +177,7 @@ export default function CommandesListPage() {
             </MenuItem>
           ))}
         </TextField>
+
         <BoutonExport
           surPdf={async () => {
             await exporterPDF({
@@ -187,7 +204,8 @@ export default function CommandesListPage() {
             await exporterExcel({
               fichier: `Commandes_${Date.now()}.xlsx`,
               feuilles: [{
-                nom: "Commandes", titre: "Liste des commandes",
+                nom: "Commandes",
+                titre: "Liste des commandes",
                 sousTitre: recherche
                   ? `Filtré : ${recherche}`
                   : filtreStatut
@@ -210,68 +228,96 @@ export default function CommandesListPage() {
           libelle="Exporter"
           taille="small"
         />
-        <Button
-          variant="contained"
-          size="small"
-          startIcon={<AddIcon />}
-          onClick={() => setModaleCreationOuverte(true)}
-          sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
-        >
-          Nouvelle commande
-        </Button>
+
+        {peutCreer && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => setModaleCreationOuverte(true)}
+            sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
+          >
+            Nouvelle commande
+          </Button>
+        )}
       </Stack>
 
       {chargement ? (
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
           <CircularProgress />
         </Box>
+      ) : !peutVoir ? (
+        <Alert severity="warning">Vous n'avez pas l'autorisation de consulter les commandes.</Alert>
       ) : (
-        <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-          <TableContainer ref={refCadre} sx={{ maxHeight: hauteurCadre ?? 320, overflow: "auto" }}>
+        <Paper
+          variant="outlined"
+          sx={{
+            borderRadius: 2,
+            overflow: "hidden",
+            bgcolor: "background.paper",
+            mb: 3,
+          }}
+        >
+          <TableContainer
+            ref={refCadre}
+            sx={{
+              // Hauteur limitée seulement si ≥ 5 lignes → plus de zone vide colorée
+              maxHeight: cadrePlein ? (hauteurCadre ?? 320) : "none",
+              overflow: cadrePlein ? "auto" : "visible",
+              bgcolor: "background.paper",
+            }}
+          >
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell align="center" sx={{ width: 48, ...STYLE_EN_TETE }}>#</TableCell>
-                  <EnTeteTriable cle="numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Numéro</EnTeteTriable>
-                  <EnTeteTriable cle="organisme_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Organisme</EnTeteTriable>
-                  <EnTeteTriable cle="nature" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Nature</EnTeteTriable>
-                  <EnTeteTriable cle="atelier" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Atelier</EnTeteTriable>
-                  <EnTeteTriable cle="delai_contractuel" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Délai contractuel</EnTeteTriable>
-                  <EnTeteTriable cle="statut" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Statut</EnTeteTriable>
+                  <EnTeteTriable cle="numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Numéro
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="organisme_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Organisme
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="nature" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Nature
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="atelier" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Atelier
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="delai_contractuel" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Délai contractuel
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="statut" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Statut
+                  </EnTeteTriable>
                   <TableCell align="center" sx={STYLE_EN_TETE}>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {commandesPaginees.map((commande, index) => (
+                {commandesPaginees.map((commande) => (
                   <TableRow
                     key={commande.id}
                     hover
                     sx={{
                       "&:last-child td": { borderBottom: 0 },
-                      "&:nth-of-type(even)": { bgcolor: "background.default" },
+                      bgcolor: "background.paper",
                     }}
                   >
-                    <TableCell align="center">
-                      <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                        {page * surPage + index + 1}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {commande.numero}
-                      </Typography>
-                    </TableCell>
+                    <TableCell align="center">{commande.numero}</TableCell>
                     <TableCell align="center">{commande.organisme_nom}</TableCell>
-                    <TableCell align="center">{LIBELLES_NATURE_COMMANDE[commande.nature] || commande.nature}</TableCell>
+                    <TableCell align="center">
+                      {LIBELLES_NATURE_COMMANDE[commande.nature] || commande.nature}
+                    </TableCell>
                     <TableCell align="center">{commande.atelier}</TableCell>
                     <TableCell align="center">{commande.delai_contractuel || "—"}</TableCell>
                     <TableCell align="center">
-                      <Chip
-                        label={LIBELLES_STATUT_COMMANDE[commande.statut] || commande.statut}
-                        color={COULEURS_STATUT_COMMANDE[commande.statut] || "default"}
-                        size="small"
-                        sx={{ fontWeight: 600 }}
-                      />
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 700,
+                          color: COULEUR_TEXTE_STATUT[commande.statut] || "text.primary",
+                        }}
+                      >
+                        {LIBELLES_STATUT_COMMANDE[commande.statut] || commande.statut}
+                      </Typography>
                     </TableCell>
                     <TableCell align="center">
                       <Tooltip title="Voir la commande">
@@ -291,7 +337,7 @@ export default function CommandesListPage() {
                 ))}
                 {commandesPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       {recherche || filtreStatut
                         ? "Aucune commande ne correspond à vos filtres."
                         : "Aucune commande enregistrée pour le moment."}
@@ -302,22 +348,30 @@ export default function CommandesListPage() {
             </Table>
           </TableContainer>
 
-          {/* Pagination : entrées par page + affichage des résultats */}
           {commandesFiltrees.length > 0 && (
-            <PaginationBar
-              compte={commandesFiltrees.length}
-              page={page}
-              surPage={surPage}
-              onPageChange={setPage}
-              onSurPageChange={(nouvelleValeur) => { setSurPage(nouvelleValeur); setPage(0); }}
-            />
+            <Box
+              sx={{
+                borderTop: "1px solid",
+                borderColor: "divider",
+                bgcolor: "background.paper",
+                px: 1,
+                py: 0.5,
+              }}
+            >
+              <PaginationBar
+                compte={commandesFiltrees.length}
+                page={page}
+                surPage={surPage}
+                onPageChange={setPage}
+                onSurPageChange={(nouvelleValeur) => { setSurPage(nouvelleValeur); setPage(0); }}
+              />
+            </Box>
           )}
         </Paper>
       )}
 
-      {/* Modale : nouvelle commande */}
       <Dialog
-        open={modaleCreationOuverte}
+        open={modaleCreationOuverte && peutCreer}
         onClose={() => setModaleCreationOuverte(false)}
         fullWidth
         maxWidth="sm"
@@ -336,7 +390,6 @@ export default function CommandesListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modale : détail commande + devis */}
       <Dialog
         open={Boolean(commandeSelectionneeId)}
         onClose={() => setCommandeSelectionneeId(null)}

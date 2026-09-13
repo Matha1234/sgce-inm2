@@ -7,22 +7,163 @@ import {
 } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { alpha } from "@mui/material/styles";
 
 import { listerControles, recupererTableauBordRentabilite } from "../api/controleApi";
-import { COULEURS_RESULTAT_CONTROLE, LIBELLES_RESULTAT_CONTROLE } from "../constants/roles";
+import { LIBELLES_RESULTAT_CONTROLE } from "../constants/roles";
 import PageHeader from "../components/common/PageHeader";
 import EnTeteTriable, { STYLE_EN_TETE } from "../components/common/EnTeteTriable";
 import PaginationBar from "../components/common/PaginationBar";
 import BoutonExport from "../components/common/BoutonExport";
 import { useTriTableau } from "../utils/tri";
 import { useHauteurCinqLignes } from "../utils/tableau";
-import { CarteAnneau, CarteDonutLegende } from "../components/common/CartesTableauBord";
+import { CarteDonutLegende } from "../components/common/CartesTableauBord";
+
+const COULEUR_TEXTE_RESULTAT = {
+  SOUS_MARGE: "error.main",
+  DANS_LA_NORME: "success.main",
+  SUR_MARGE: "warning.main",
+};
+
+const MARGE_HEX = {
+  SOUS_MARGE: "#d32f2f",
+  DANS_LA_NORME: "#2e7d32",
+  SUR_MARGE: "#ed6c02",
+};
+
+const CARD_BASE = {
+  height: "100%",
+  border: "1px solid",
+  borderColor: "divider",
+  borderRadius: 2,
+  bgcolor: "background.paper",
+  boxShadow: "0 1px 4px rgba(15,35,60,.06)",
+  transition: "box-shadow .15s, transform .15s",
+};
+
+/** Carte indicateur — même modèle que le tableau de bord */
+function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone }) {
+  return (
+    <Card
+      sx={{
+        ...CARD_BASE,
+        minHeight: 150,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <CardContent
+        sx={{
+          p: 2,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          textAlign: "center",
+          width: "100%",
+          boxSizing: "border-box",
+          "&:last-child": { pb: 2 },
+        }}
+      >
+        <Box
+          sx={{
+            width: 42,
+            height: 42,
+            borderRadius: 2,
+            display: "grid",
+            placeItems: "center",
+            bgcolor: alpha(couleur, 0.1),
+            color: couleur,
+            mb: 0.7,
+          }}
+        >
+          {icone}
+        </Box>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+            fontSize: 11,
+            width: "100%",
+            textAlign: "center",
+          }}
+        >
+          {titre}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 30,
+            lineHeight: 1.1,
+            fontWeight: 800,
+            color: couleur,
+            width: "100%",
+            textAlign: "center",
+            my: 0.3,
+          }}
+        >
+          {valeur}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ fontSize: 11.5, width: "100%", textAlign: "center" }}
+        >
+          {sousTitre}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Panneau avec en-tête — même modèle que le tableau de bord */
+function Panneau({ titre, sousTitre, children }) {
+  return (
+    <Card sx={{ ...CARD_BASE, minHeight: 200, display: "flex", flexDirection: "column" }}>
+      <Box
+        sx={{
+          px: 1.75,
+          py: 1.15,
+          bgcolor: "action.hover",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          flexShrink: 0,
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 750, fontSize: 13.5, lineHeight: 1.3 }}>
+          {titre}
+        </Typography>
+        {sousTitre && (
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11.5 }}>
+            {sousTitre}
+          </Typography>
+        )}
+      </Box>
+      <Box
+        sx={{
+          p: 1.5,
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Box sx={{ width: "100%" }}>{children}</Box>
+      </Box>
+    </Card>
+  );
+}
 
 export default function ControlesListPage() {
   const { utilisateur } = useSelector((state) => state.auth);
   const estAdmin = utilisateur?.role === "ADMIN";
-  // Agent SDO : consultation des fiches de contrôle (UC-06).
-  // Admin : + indicateurs agrégés du tableau de bord Direction.
+
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
   const [controles, setControles] = useState([]);
@@ -40,7 +181,6 @@ export default function ControlesListPage() {
             const tableauBord = await recupererTableauBordRentabilite();
             setIndicateurs(tableauBord);
           } catch {
-            // Les indicateurs Direction restent optionnels si l'API échoue.
             setIndicateurs(null);
           }
         } else {
@@ -55,7 +195,6 @@ export default function ControlesListPage() {
     charger();
   }, [estAdmin]);
 
-  // Tri des fiches de contrôle par colonne (croissant puis décroissant)
   const { cleTri, directionTri, gererTri, donneesTriees: controlesTries } = useTriTableau(controles);
 
   const [page, setPage] = useState(0);
@@ -65,10 +204,23 @@ export default function ControlesListPage() {
     [controlesTries, page, surPage]
   );
 
-  // Cadre mesuré : exactement l'en-tête + 5 lignes, sans barre de
-  // défilement à 5 entrées ; elle apparaît dès qu'on augmente l'affichage.
   const refCadre = useRef(null);
   const hauteurCadre = useHauteurCinqLignes(refCadre, controlesPaginees.length);
+
+  const rentabiliteSegments = useMemo(() => {
+    if (!indicateurs) return [];
+    return [
+      ["SOUS_MARGE", "Sous-marge", indicateurs.nombre_sous_marge],
+      ["DANS_LA_NORME", "Dans la norme", indicateurs.nombre_dans_la_norme],
+      ["SUR_MARGE", "Sur-marge", indicateurs.nombre_sur_marge],
+    ]
+      .filter((x) => x[2] > 0)
+      .map(([code, label, value]) => ({
+        label,
+        value,
+        couleur: MARGE_HEX[code],
+      }));
+  }, [indicateurs]);
 
   if (chargement) {
     return (
@@ -83,7 +235,6 @@ export default function ControlesListPage() {
 
   return (
     <Box>
-      {/* En-tête de page centré avec pastille + titre */}
       <PageHeader
         icone={<AssessmentIcon />}
         titre="Rentabilité"
@@ -95,8 +246,7 @@ export default function ControlesListPage() {
 
       {erreur && <Alert severity="warning" sx={{ mb: 3 }}>{erreur}</Alert>}
 
-      {/* Bouton d'export */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1.5 }}>
         <BoutonExport
           surPdf={async () => {
             const e = await import("../utils/exportateur");
@@ -108,12 +258,22 @@ export default function ControlesListPage() {
               colonnes: [
                 e.colonne("Dossier", "dossier_numero"),
                 e.colonne("Atelier", "atelier_nom"),
-                e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
-                e.colonnePerso("Prix de revient estimé", (c) => c.prix_revient_estime != null ? `${Number(c.prix_revient_estime).toLocaleString("fr-FR")} Ar` : "", "right"),
-                e.colonnePerso("Coût réel", (c) => `${Number(c.cout_reel_total).toLocaleString("fr-FR")} Ar`, "right"),
-                e.colonnePerso("Écart", (c) => c.ecart_prix_revient != null ? `${Number(c.ecart_prix_revient).toLocaleString("fr-FR")} Ar` : "", "right"),
-                e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
-                e.colonne("Résultat", "resultat"),
+                e.colonnePerso("Composant", (c) =>
+                  c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"
+                ),
+                e.colonnePerso("Coût réel", (c) =>
+                  `${Number(c.cout_reel_total).toLocaleString("fr-FR")} Ar`, "right"
+                ),
+                e.colonnePerso("Écart", (c) =>
+                  c.ecart_prix_revient != null
+                    ? `${Number(c.ecart_prix_revient).toLocaleString("fr-FR")} Ar`
+                    : "",
+                  "right"
+                ),
+                e.colonnePerso("Marge %", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
+                e.colonnePerso("Résultat", (c) => LIBELLES_RESULTAT_CONTROLE[c.resultat] || c.resultat),
+                e.colonnePerso("Écart significatif", (c) => (c.ecart_significatif ? "Significatif" : "")),
+                e.colonnePerso("Date", (c) => new Date(c.date_controle).toLocaleDateString("fr-FR")),
               ],
               lignes: controles,
             });
@@ -123,97 +283,152 @@ export default function ControlesListPage() {
             await e.exporterExcel({
               fichier: `Rentabilite_${Date.now()}.xlsx`,
               feuilles: [{
-                nom: "Contrôles", titre: "Rapport de rentabilité",
+                nom: "Contrôles",
+                titre: "Fiches de contrôle du prix de revient",
                 meta: e.metaEdition(controles.length),
                 colonnes: [
                   e.colonne("Dossier", "dossier_numero"),
                   e.colonne("Atelier", "atelier_nom"),
-                  e.colonnePerso("Composant", (c) => c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"),
-                  e.colonnePerso("Prix de revient estimé", (c) => c.prix_revient_estime != null ? Number(c.prix_revient_estime).toLocaleString("fr-FR") : "", "right"),
-                  e.colonnePerso("Coût réel", (c) => Number(c.cout_reel_total).toLocaleString("fr-FR"), "right"),
-                  e.colonnePerso("Écart (Ar)", (c) => c.ecart_prix_revient != null ? Number(c.ecart_prix_revient).toLocaleString("fr-FR") : "", "right"),
-                  e.colonnePerso("Marge", (c) => `${c.marge_reelle_pourcentage}%`, "right"),
-                  e.colonne("Résultat", "resultat"),
-                  e.colonnePerso("Écart significatif", (c) => c.ecart_significatif ? "Significatif" : ""),
+                  e.colonnePerso("Composant", (c) =>
+                    c.composant_designation ? `C${c.composant_ordre} · ${c.composant_designation}` : "Global"
+                  ),
+                  e.colonnePerso("Coût réel (Ar)", (c) => Number(c.cout_reel_total).toLocaleString("fr-FR"), "right"),
+                  e.colonnePerso("Écart (Ar)", (c) =>
+                    c.ecart_prix_revient != null
+                      ? Number(c.ecart_prix_revient).toLocaleString("fr-FR")
+                      : "",
+                    "right"
+                  ),
+                  e.colonnePerso("Marge %", (c) => String(c.marge_reelle_pourcentage), "right"),
+                  e.colonnePerso("Résultat", (c) => LIBELLES_RESULTAT_CONTROLE[c.resultat] || c.resultat),
+                  e.colonnePerso("Écart significatif", (c) => (c.ecart_significatif ? "Significatif" : "")),
                   e.colonnePerso("Date", (c) => new Date(c.date_controle).toLocaleDateString("fr-FR")),
                 ],
                 lignes: controles,
               }],
             });
           }}
-          libelle="Exporter le rapport"
+          libelle="Exporter"
           taille="small"
         />
       </Box>
 
-      {/* Indicateurs (partie non scrollable) — même style de cartes (anneaux,
-          donut avec légende) que le tableau de bord, pour une identité
-          visuelle cohérente entre les deux écrans qui montrent la
-          rentabilité. */}
-      {indicateurs && (
-        <Grid container spacing={2} sx={{ mb: 3, flexShrink: 0 }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <CarteDonutLegende
-              titre="Résultats de contrôle"
-              segments={[
-                { label: "Sous-marge", value: indicateurs.nombre_sous_marge, couleur: "#d32f2f" },
-                { label: "Dans la norme", value: indicateurs.nombre_dans_la_norme, couleur: "#2e7d32" },
-                { label: "Sur-marge", value: indicateurs.nombre_sur_marge, couleur: "#ed6c02" },
-              ].filter((s) => s.value > 0)}
-            />
+      {/* Indicateurs — même présentation que le tableau de bord */}
+      {estAdmin && indicateurs && (
+        <Stack spacing={1.5} sx={{ mb: 3 }}>
+          <Grid container spacing={1.5} alignItems="stretch">
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: "flex" }}>
+              <Box sx={{ width: "100%" }}>
+                <CarteIndicateur
+                  titre="Marge moyenne"
+                  valeur={`${indicateurs.marge_moyenne_pourcentage ?? 0}%`}
+                  sousTitre={`${indicateurs.nombre_controles ?? 0} contrôles`}
+                  couleur="#1565c0"
+                  icone={<TrendingUpIcon fontSize="small" />}
+                />
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: "flex" }}>
+              <Box sx={{ width: "100%" }}>
+                <CarteIndicateur
+                  titre="Écarts significatifs"
+                  valeur={indicateurs.nombre_ecarts_significatifs ?? 0}
+                  sousTitre={`sur ${indicateurs.nombre_controles ?? 0} fiches`}
+                  couleur={
+                    indicateurs.nombre_ecarts_significatifs ? "#d32f2f" : "#2e7d32"
+                  }
+                  icone={<WarningAmberIcon fontSize="small" />}
+                />
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} sx={{ display: "flex" }}>
+              <Box sx={{ width: "100%" }}>
+                <CarteIndicateur
+                  titre="Contrôles réalisés"
+                  valeur={indicateurs.nombre_controles ?? 0}
+                  sousTitre="fiches analysées"
+                  couleur="#6a1b9a"
+                  icone={<AssessmentIcon fontSize="small" />}
+                />
+              </Box>
+            </Grid>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <CarteAnneau
-              titre="Marge moyenne" libelleValeur={`${indicateurs.marge_moyenne_pourcentage}%`}
-              pourcentage={indicateurs.marge_moyenne_pourcentage} couleur="#1565c0"
-              sousTitre={`${indicateurs.nombre_controles} fiche(s) de contrôle`}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <CarteAnneau
-              titre="Écarts significatifs" libelleValeur={indicateurs.nombre_ecarts_significatifs}
-              pourcentage={indicateurs.nombre_controles > 0 ? (indicateurs.nombre_ecarts_significatifs / indicateurs.nombre_controles) * 100 : 0}
-              couleur={indicateurs.nombre_ecarts_significatifs > 0 ? "#d32f2f" : "#2e7d32"}
-              sousTitre={`sur ${indicateurs.nombre_controles} fiches`}
-            />
-          </Grid>
-        </Grid>
+
+          {rentabiliteSegments.length > 0 && (
+            <Grid container spacing={1.5} alignItems="stretch">
+              <Grid size={{ xs: 12, md: 6 }} sx={{ display: "flex" }}>
+                <Box sx={{ width: "100%" }}>
+                  <Panneau titre="Résultats de contrôle" sousTitre="Répartition des marges">
+                    <CarteDonutLegende titre="Résultats" segments={rentabiliteSegments} />
+                  </Panneau>
+                </Box>
+              </Grid>
+            </Grid>
+          )}
+        </Stack>
       )}
 
-      {/* Tableau des fiches de contrôle (scrollable) */}
       <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.default", flexShrink: 0 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1.25}
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.default",
+            flexShrink: 0,
+          }}
+        >
           <FactCheckIcon color="primary" fontSize="small" />
-          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 15 }}>Fiches de contrôle</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 15 }}>
+            Fiches de contrôle
+          </Typography>
           <Chip label={`${controles.length} fiche(s)`} size="small" variant="outlined" />
         </Stack>
+
         <TableContainer ref={refCadre} sx={{ maxHeight: hauteurCadre ?? 320, overflow: "auto" }}>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
-                <TableCell align="center" sx={{ width: 48, ...STYLE_EN_TETE }}>#</TableCell>
-                <EnTeteTriable cle="dossier_numero" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Dossier</EnTeteTriable>
-                <EnTeteTriable cle="atelier_nom" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Atelier</EnTeteTriable>
-                <EnTeteTriable cle="composant_ordre" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Composant</EnTeteTriable>
-                <EnTeteTriable cle="cout_reel_total" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Coût réel</EnTeteTriable>
-                <EnTeteTriable cle="marge_reelle_pourcentage" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Marge réelle</EnTeteTriable>
-                <EnTeteTriable cle="resultat" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Résultat</EnTeteTriable>
-                <EnTeteTriable cle="ecart_significatif" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Écart</EnTeteTriable>
-                <EnTeteTriable cle="date_controle" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>Date</EnTeteTriable>
+                <EnTeteTriable cle="dossier_numero" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Dossier
+                </EnTeteTriable>
+                <EnTeteTriable cle="atelier_nom" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Atelier
+                </EnTeteTriable>
+                <EnTeteTriable cle="composant_ordre" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Composant
+                </EnTeteTriable>
+                <EnTeteTriable cle="cout_reel_total" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Coût réel
+                </EnTeteTriable>
+                <EnTeteTriable cle="marge_reelle_pourcentage" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Marge réelle
+                </EnTeteTriable>
+                <EnTeteTriable cle="resultat" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Résultat
+                </EnTeteTriable>
+                <EnTeteTriable cle="ecart_significatif" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Écart
+                </EnTeteTriable>
+                <EnTeteTriable cle="date_controle" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                  Date
+                </EnTeteTriable>
               </TableRow>
             </TableHead>
             <TableBody>
-              {controlesPaginees.map((controle, index) => (
-                <TableRow key={controle.id} hover sx={{
-                  "&:last-child td": { borderBottom: 0 },
-                  "&:nth-of-type(even)": { bgcolor: "background.default" },
-                }}>
-                  <TableCell align="center">
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: "text.secondary" }}>
-                      {page * surPage + index + 1}
-                    </Typography>
+              {controlesPaginees.map((controle) => (
+                <TableRow
+                  key={controle.id}
+                  hover
+                  sx={{ "&:last-child td": { borderBottom: 0 } }}
+                >
+                  <TableCell align="center" sx={{ fontWeight: 600 }}>
+                    {controle.dossier_numero}
                   </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600 }}>{controle.dossier_numero}</TableCell>
                   <TableCell align="center">{controle.atelier_nom}</TableCell>
                   <TableCell align="center">
                     {controle.composant_designation
@@ -228,11 +443,24 @@ export default function ControlesListPage() {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600 }}>{controle.marge_reelle_pourcentage}%</TableCell>
-                  <TableCell align="center">
-                    <Chip size="small" label={LIBELLES_RESULTAT_CONTROLE[controle.resultat] || controle.resultat}
-                      color={COULEURS_RESULTAT_CONTROLE[controle.resultat] || "default"} sx={{ fontWeight: 600 }} />
+                  <TableCell align="center" sx={{ fontWeight: 600 }}>
+                    {controle.marge_reelle_pourcentage}%
                   </TableCell>
+
+                  {/* Résultat : texte coloré */}
+                  <TableCell align="center">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 700,
+                        color: COULEUR_TEXTE_RESULTAT[controle.resultat] || "text.primary",
+                      }}
+                    >
+                      {LIBELLES_RESULTAT_CONTROLE[controle.resultat] || controle.resultat}
+                    </Typography>
+                  </TableCell>
+
+                  {/* Écart : montant normal ; seul « Significatif » en couleur */}
                   <TableCell align="center">
                     {controle.ecart_prix_revient != null && (
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -240,15 +468,28 @@ export default function ControlesListPage() {
                       </Typography>
                     )}
                     {controle.ecart_significatif && (
-                      <Chip size="small" label="Significatif" color="warning" variant="outlined" sx={{ fontWeight: 600 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: "block",
+                          fontWeight: 700,
+                          color: "warning.main",
+                          mt: 0.25,
+                        }}
+                      >
+                        Significatif
+                      </Typography>
                     )}
                   </TableCell>
-                  <TableCell align="center">{new Date(controle.date_controle).toLocaleDateString("fr-FR")}</TableCell>
+
+                  <TableCell align="center">
+                    {new Date(controle.date_controle).toLocaleDateString("fr-FR")}
+                  </TableCell>
                 </TableRow>
               ))}
               {controles.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5, color: "text.secondary" }}>
                     Aucun contrôle de prix de revient enregistré pour le moment.
                   </TableCell>
                 </TableRow>
@@ -256,6 +497,7 @@ export default function ControlesListPage() {
             </TableBody>
           </Table>
         </TableContainer>
+
         <PaginationBar
           compte={controles.length}
           page={page}

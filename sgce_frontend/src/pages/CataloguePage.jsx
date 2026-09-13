@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog,
-  DialogActions, DialogContent, DialogTitle, Divider, Grid, IconButton,
-  MenuItem, Paper, Stack, TextField, Tooltip, Typography,
+  DialogActions, DialogContent, DialogTitle, Grid, IconButton,
+  MenuItem, Paper, Stack, TextField, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
-import Inventory2Icon from "@mui/icons-material/Inventory2";
 import CategoryIcon from "@mui/icons-material/Category";
 import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
+import { alpha } from "@mui/material/styles";
 
 import {
   creerComposant, creerFamille, creerLigneMatiere, creerLigneOperation,
@@ -22,7 +22,6 @@ import PageHeader, { PastilleIcone } from "../components/common/PageHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import { useNotifier } from "../components/common/Notifier";
 import BoutonExport from "../components/common/BoutonExport";
-import { alpha } from "@mui/material/styles";
 
 const LIBELLES_FAMILLE = {
   FEUILLE_VOLANTE: "Feuille volante",
@@ -58,13 +57,15 @@ export default function CataloguePage() {
   const [chargementDetail, setChargementDetail] = useState(false);
 
   const [dialogueFamille, setDialogueFamille] = useState(false);
-  const [nouvelleFamille, setNouvelleFamille] = useState({ nom: "FEUILLE_VOLANTE", structure_type: "" });
-
+  const [nouvelleFamille, setNouvelleFamille] = useState({ nom: "FEUILLE_VOLANTE" });
   const [dialogueProduit, setDialogueProduit] = useState(false);
-  const [nouveauProduit, setNouveauProduit] = useState({ famille: "", nom: "", reference: "", marge_min: "", marge_max: "" });
-
+  const [nouveauProduit, setNouveauProduit] = useState({
+    famille: "", nom: "", reference: "", marge_min: "", marge_max: "",
+  });
   const [dialoguePoste, setDialoguePoste] = useState(false);
-  const [nouveauPoste, setNouveauPoste] = useState({ nom: "", type_poste: "MACHINE", cout_horaire: "" });
+  const [nouveauPoste, setNouveauPoste] = useState({
+    nom: "", type_poste: "MACHINE", cout_horaire: "",
+  });
 
   const [nouveauComposant, setNouveauComposant] = useState({ ordre: "", designation: "" });
   const [nouvelleLigneMatiere, setNouvelleLigneMatiere] = useState({});
@@ -73,15 +74,14 @@ export default function CataloguePage() {
 
   const charger = async () => {
     setChargement(true);
-    setErreur("");
     try {
-      const [f, p, a, pc] = await Promise.all([
+      const [f, p, a, postes] = await Promise.all([
         listerFamilles(), listerProduits(), listerArticles(), listerPostesDeCharge(),
       ]);
       setFamilles(normaliser(f));
       setProduits(normaliser(p));
       setArticles(normaliser(a));
-      setPostesDeCharge(normaliser(pc));
+      setPostesDeCharge(normaliser(postes));
     } catch {
       setErreur("Impossible de charger le catalogue.");
     } finally {
@@ -89,42 +89,42 @@ export default function CataloguePage() {
     }
   };
 
-  useEffect(() => {
-    charger();
-  }, []);
+  useEffect(() => { charger(); }, []);
 
   const ouvrirProduit = async (id) => {
     setChargementDetail(true);
     try {
-      const donnees = await recupererProduit(id);
-      setProduitSelectionne(donnees);
+      const detail = await recupererProduit(id);
+      setProduitSelectionne(detail);
     } catch {
-      setErreur("Impossible de charger ce produit.");
+      setErreur("Impossible de charger le détail du produit.");
     } finally {
       setChargementDetail(false);
     }
   };
 
   const rafraichirProduitOuvert = async () => {
-    if (produitSelectionne) await ouvrirProduit(produitSelectionne.id);
+    if (produitSelectionne?.id) await ouvrirProduit(produitSelectionne.id);
+    await charger();
   };
 
   const gererCreationFamille = async () => {
     try {
       await creerFamille(nouvelleFamille);
-      afficherSucces("Famille de produits créée avec succès.");
+      afficherSucces("Famille créée avec succès.");
       setDialogueFamille(false);
-      setNouvelleFamille({ nom: "FEUILLE_VOLANTE", structure_type: "" });
+      setNouvelleFamille({ nom: "FEUILLE_VOLANTE" });
       charger();
-    } catch (err) {
-      setErreur(err.response?.data?.nom?.[0] || "Impossible de créer cette famille.");
+    } catch {
+      setErreur("Impossible de créer cette famille.");
     }
   };
 
   const gererCreationProduit = async () => {
     try {
       const cree = await creerProduit({
-        ...nouveauProduit,
+        famille: nouveauProduit.famille,
+        nom: nouveauProduit.nom,
         reference: nouveauProduit.reference || "",
         marge_min: nouveauProduit.marge_min || null,
         marge_max: nouveauProduit.marge_max || null,
@@ -205,11 +205,6 @@ export default function CataloguePage() {
     }
   };
 
-  /**
-   * Suppressions du catalogue : toutes passent par un dialogue de
-   * confirmation (action destructive et definitive), puis affichent un
-   * message de succes une fois la suppression executee.
-   */
   const demanderSuppression = (type, id, nom) => setConfirmationSuppression({ type, id, nom });
 
   const confirmerSuppression = async () => {
@@ -220,14 +215,14 @@ export default function CataloguePage() {
       switch (cible.type) {
         case "famille":
           await supprimerFamille(cible.id);
-          charger();
           afficherSucces("Famille supprimée avec succès.");
+          charger();
           break;
         case "produit":
           await supprimerProduit(cible.id);
           setProduitSelectionne(null);
-          charger();
           afficherSucces("Produit supprimé avec succès.");
+          charger();
           break;
         case "composant":
           await supprimerComposant(cible.id);
@@ -256,9 +251,7 @@ export default function CataloguePage() {
     return (
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, mt: 12 }}>
         <CircularProgress />
-        <Typography variant="body2" color="text.secondary">
-          Chargement du catalogue…
-        </Typography>
+        <Typography variant="body2" color="text.secondary">Chargement du catalogue…</Typography>
       </Box>
     );
   }
@@ -276,91 +269,20 @@ export default function CataloguePage() {
           <BoutonExport
             surExcel={async () => {
               const e = await import("../utils/exportateur");
-              const nomComposants = (c) => {
-                if (!c || !c.composants) return [];
-                const out = [];
-                c.composants.forEach((cp) => {
-                  out.push({
-                    composant: `${cp.ordre} — ${cp.designation}`,
-                    type: "Composant",
-                    designation: "",
-                    quantite: "",
-                    cout: "",
-                  });
-                  (cp.lignes_matiere_premiere || []).forEach((l) => {
-                    out.push({
-                      composant: "",
-                      type: "Matière",
-                      designation: l.article_designation,
-                      quantite: `${l.quantite_unitaire} ${l.article_unite || ""}/ex`,
-                      cout: `${l.type_charge === "FIXE" ? "F" : "V"}`,
-                    });
-                  });
-                  (cp.lignes_operation || []).forEach((l) => {
-                    out.push({
-                      composant: "",
-                      type: "Opération",
-                      designation: `${l.libelle} — ${l.poste_nom}`,
-                      quantite: `${l.temps_unitaire} min/ex`,
-                      cout: `${l.type_charge === "FIXE" ? "F" : "V"}`,
-                    });
-                  });
-                });
-                return out;
-              };
-              const feuilles = [
-                {
-                  nom: "Produits", titre: "Catalogue de produits",
+              await e.exporterExcel({
+                fichier: `Catalogue_${Date.now()}.xlsx`,
+                feuilles: [{
+                  nom: "Produits",
+                  titre: "Catalogue de produits",
                   meta: e.metaEdition(produits.length),
                   colonnes: [
                     e.colonne("Produit", "nom", "left"),
                     e.colonnePerso("Famille", (p) => LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom, "left"),
                     e.colonnePerso("Composants", (p) => String(p.nombre_composants)),
-                    e.colonnePerso("Actif", (p) => p.actif ? "Oui" : "Non"),
+                    e.colonnePerso("Actif", (p) => (p.actif ? "Oui" : "Non")),
                   ],
                   lignes: produits,
-                },
-                {
-                  nom: "Postes de charge", titre: "Postes de charge",
-                  meta: e.metaEdition(postesDeCharge.length),
-                  colonnes: [
-                    e.colonne("Poste", "nom", "left"),
-                    e.colonnePerso("Type", (p) => LIBELLES_TYPE_POSTE[p.type_poste] || p.type_poste, "left"),
-                    e.colonnePerso("Coût horaire", (p) => `${Number(p.cout_horaire).toLocaleString("fr-FR")} Ar`, "right"),
-                  ],
-                  lignes: postesDeCharge,
-                },
-              ];
-              if (produitSelectionne) {
-                const lignesNom = nomComposants(produitSelectionne);
-                feuilles.push({
-                  nom: "Nomenclature", titre: `Nomenclature — ${produitSelectionne.nom}`,
-                  meta: e.metaEdition(lignesNom.length),
-                  colonnes: [
-                    e.colonnePerso("Composant", (l) => l.composant, "left"),
-                    e.colonnePerso("Type", (l) => l.type),
-                    e.colonnePerso("Désignation", (l) => l.designation, "left"),
-                    e.colonne("Quantité", "quantite", "left"),
-                    e.colonnePerso("Charge", (l) => l.cout),
-                  ],
-                  lignes: lignesNom,
-                });
-              }
-              await e.exporterExcel({ fichier: `Catalogue_${Date.now()}.xlsx`, feuilles });
-            }}
-            surPdf={async () => {
-              const e = await import("../utils/exportateur");
-              await e.exporterPDF({
-                fichier: `Catalogue_${Date.now()}.pdf`,
-                titre: "Catalogue de produits",
-                meta: e.metaEdition(produits.length),
-                colonnes: [
-                  e.colonne("Produit", "nom", "left"),
-                  e.colonnePerso("Famille", (p) => LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom, "left"),
-                  e.colonnePerso("Composants", (p) => String(p.nombre_composants)),
-                  e.colonnePerso("Actif", (p) => p.actif ? "Oui" : "Non"),
-                ],
-                lignes: produits,
+                }],
               });
             }}
             libelle="Exporter"
@@ -369,369 +291,469 @@ export default function CataloguePage() {
         }
       />
 
-      {erreur && <Alert severity="warning" sx={{ mb: 1.5, flexShrink: 0 }} onClose={() => setErreur("")}>{erreur}</Alert>}
-
+      {erreur && (
+        <Alert severity="warning" sx={{ mb: 1.5 }} onClose={() => setErreur("")}>
+          {erreur}
+        </Alert>
+      )}      
       <Box>
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 4 }} sx={{ display: "flex", flexDirection: "column" }}>
-          <Stack spacing={1.5}>
-            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pl: 2, pr: 1, py: 1.5, flexShrink: 0 }}>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>Produits ({produits.length})</Typography>
-                <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setDialogueProduit(true)}>
-                  Nouveau
-                </Button>
-              </Stack>
-              <Divider />
-              <Box>
-                {produits.length === 0 ? (
-                  <Typography variant="body2" color="text.disabled" sx={{ p: 2, textAlign: "center" }}>
-                    Aucun produit dans le catalogue.
+        <Grid container spacing={2} alignItems="flex-start">
+          {/* ========== COLONNE GAUCHE ========== */}
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Stack spacing={2}>
+              <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{
+                    px: 2,
+                    py: 1.25,
+                    bgcolor: "action.hover",
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    width: "100%",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Produits ({produits.length})
                   </Typography>
-                ) : (
-                  produits.map((p) => (
-                    <Box
-                      key={p.id}
-                      onClick={() => ouvrirProduit(p.id)}
-                      sx={{
-                        px: 2, py: 1.25, cursor: "pointer", borderBottom: "1px solid", borderColor: "divider",
-                        bgcolor: produitSelectionne?.id === p.id ? (t) => alpha(t.palette.primary.main, 0.14) : "transparent",
-                        "&:hover": { bgcolor: "action.hover" },
-                        transition: "background-color 0.2s",
-                      }}
-                    >
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{p.nom}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom} — {p.nombre_composants} composant(s)
-                          </Typography>
-                        </Box>
-                        {!p.actif && <Chip label="Inactif" size="small" variant="outlined" sx={{ ml: 1, flexShrink: 0 }} />}
-                      </Stack>
-                    </Box>
-                  ))
-                )}
-              </Box>
-            </Paper>
-
-            <Paper variant="outlined" sx={{ borderRadius: 2 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ pl: 2, pr: 1, py: 1.5 }}>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>Familles</Typography>
-                <Button size="small" startIcon={<AddIcon fontSize="small" />} onClick={() => setDialogueFamille(true)}>
-                  Ajouter
-                </Button>
-              </Stack>
-              <Box sx={{ px: 2, pb: 1.5 }}>
-                <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-                  {familles.map((f) => (
-                    <Chip
-                      key={f.id}
-                      label={LIBELLES_FAMILLE[f.nom] || f.nom}
-                      size="small"
-                      onDelete={() => demanderSuppression("famille", f.id, LIBELLES_FAMILLE[f.nom] || f.nom)}
-                    />
-                  ))}
-                  {familles.length === 0 && (
-                    <Typography variant="body2" color="text.disabled">Aucune famille définie.</Typography>
-                  )}
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    onClick={() => setDialogueProduit(true)}
+                    sx={{ flexShrink: 0, ml: "auto" }}
+                  >
+                    Nouveau
+                  </Button>
                 </Stack>
-              </Box>
-            </Paper>
-          </Stack>
-        </Grid>
+                <Box sx={{ maxHeight: 380, overflow: "auto" }}>
+                  {produits.length === 0 ? (
+                    <Typography variant="body2" color="text.disabled" sx={{ p: 2.5, textAlign: "center" }}>
+                      Aucun produit dans le catalogue.
+                    </Typography>
+                  ) : (
+                    produits.map((p) => (
+                      <Box
+                        key={p.id}
+                        onClick={() => ouvrirProduit(p.id)}
+                        sx={{
+                          px: 2, py: 1.35, cursor: "pointer",
+                          borderBottom: "1px solid", borderColor: "divider",
+                          bgcolor: produitSelectionne?.id === p.id
+                            ? (t) => alpha(t.palette.primary.main, 0.12)
+                            : "transparent",
+                          borderLeft: "3px solid",
+                          borderLeftColor: produitSelectionne?.id === p.id ? "primary.main" : "transparent",
+                          "&:hover": { bgcolor: "action.hover" },
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{p.nom}</Typography>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          {LIBELLES_FAMILLE[p.famille_nom] || p.famille_nom}
+                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.25 }}>
+                          <Typography variant="caption" color="text.disabled">
+                            {p.nombre_composants} composant(s)
+                          </Typography>
+                          {!p.actif && (
+                            <Chip label="Inactif" size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+                          )}
+                        </Stack>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              </Paper>
 
-        <Grid size={{ xs: 12, md: 8 }} sx={{ display: "flex" }}>
-          {!produitSelectionne && (
-            <Paper variant="outlined" sx={{ borderRadius: 2, width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Box sx={{ textAlign: "center", py: 8 }}>
-                <Inventory2Icon sx={{ fontSize: 40, color: "text.disabled", mb: 1 }} />
-                <Typography color="text.secondary">
-                  Sélectionnez un produit pour voir ses composants, ou créez-en un nouveau.
+              <Paper
+                variant="outlined"
+                sx={{
+                  borderRadius: 2,
+                  p: 2,
+                  overflow: "hidden",
+                  width: "100%",
+                  boxSizing: "border-box",
+                }}
+              >
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 1.5, width: "100%" }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Familles
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    onClick={() => setDialogueFamille(true)}
+                    sx={{ flexShrink: 0, ml: "auto" }}
+                  >
+                    Ajouter
+                  </Button>
+                </Stack>
+
+                {/* Les chips restent DANS le cadre */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    width: "100%",
+                    maxWidth: "100%",
+                    overflow: "hidden",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {familles.length === 0 ? (
+                    <Typography variant="caption" color="text.disabled">
+                      Aucune famille.
+                    </Typography>
+                  ) : (
+                    familles.map((f) => (
+                      <Chip
+                        key={f.id}
+                        label={LIBELLES_FAMILLE[f.nom] || f.nom}
+                        size="small"
+                        variant="outlined"
+                        onDelete={() =>
+                          demanderSuppression("famille", f.id, LIBELLES_FAMILLE[f.nom] || f.nom)
+                        }
+                        sx={{ maxWidth: "100%" }}
+                      />
+                    ))
+                  )}
+                </Box>
+              </Paper>
+            </Stack>
+          </Grid>
+
+          {/* ========== COLONNE DROITE ========== */}
+          <Grid size={{ xs: 12, md: 8 }}>
+            {!produitSelectionne ? (
+              <Paper variant="outlined" sx={{ borderRadius: 2, minHeight: 360, display: "flex", alignItems: "center", justifyContent: "center", p: 4 }}>
+                <Typography color="text.secondary" textAlign="center">
+                  Sélectionnez un produit à gauche pour afficher sa nomenclature
+                  (composants, matières et opérations).
                 </Typography>
+              </Paper>
+            ) : chargementDetail ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 10 }}>
+                <CircularProgress />
               </Box>
-            </Paper>
-          )}
-
-          {produitSelectionne && (
-            <Paper variant="outlined" sx={{ borderRadius: 2, width: "100%" }}>
-              <Box sx={{ p: 2.5, pb: 0 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-                  <Box>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      {produitSelectionne.nom}
-                      {produitSelectionne.reference && (
-                        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                          ({produitSelectionne.reference})
+            ) : (
+              <Stack spacing={2}>
+                <Paper variant="outlined" sx={{ borderRadius: 2, p: 2.5 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    spacing={2}
+                    sx={{ width: "100%" }}
+                  >
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.25 }}>
+                        {produitSelectionne.nom}
+                        {produitSelectionne.reference && (
+                          <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 500 }}>
+                            ({produitSelectionne.reference})
+                          </Typography>
+                        )}
+                      </Typography>
+                      {produitSelectionne.description && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {produitSelectionne.description}
                         </Typography>
                       )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {LIBELLES_FAMILLE[produitSelectionne.famille] || produitSelectionne.famille_nom}
-                    </Typography>
-                    {(produitSelectionne.marge_min != null || produitSelectionne.marge_max != null) && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                        Marge cible : {produitSelectionne.marge_min ?? "—"}% à {produitSelectionne.marge_max ?? "—"}%
-                      </Typography>
-                    )}
-                    {produitSelectionne.date_maj && (
-                      <Typography variant="caption" color="text.disabled" sx={{ display: "block" }}>
-                        Dernière mise à jour : {new Date(produitSelectionne.date_maj).toLocaleDateString("fr-FR")}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Tooltip title="Supprimer ce produit">
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.25 }}>
+                        <Chip
+                          size="small" color="primary" variant="outlined"
+                          label={LIBELLES_FAMILLE[produitSelectionne.famille] || produitSelectionne.famille_nom || "—"}
+                        />
+                        {(produitSelectionne.marge_min != null || produitSelectionne.marge_max != null) && (
+                          <Chip
+                            size="small" variant="outlined"
+                            label={`Marge cible : ${produitSelectionne.marge_min ?? "—"}% à ${produitSelectionne.marge_max ?? "—"}%`}
+                          />
+                        )}
+                        {produitSelectionne.date_maj && (
+                          <Chip
+                            size="small" variant="outlined"
+                            label={`MAJ : ${new Date(produitSelectionne.date_maj).toLocaleDateString("fr-FR")}`}
+                          />
+                        )}
+                      </Stack>
+                    </Box>
                     <IconButton
-                      size="small" color="error"
-                      onClick={() => demanderSuppression("produit", produitSelectionne.id, produitSelectionne.nom)}
+                      color="error"
+                      size="small"
+                      onClick={() =>
+                        demanderSuppression("produit", produitSelectionne.id, produitSelectionne.nom)
+                      }
+                      sx={{ flexShrink: 0, ml: "auto" }}
                     >
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Box>
+                  </Stack>
+                </Paper>
 
-              {chargementDetail && (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                  <CircularProgress size={22} />
-                </Box>
-              )}
-
-              {!chargementDetail && (
-                <Box sx={{ p: 2.5 }}>
-                    {(produitSelectionne.composants || []).map((composant) => (
-                      <Box
-                        key={composant.id}
-                        sx={{ mb: 2, p: 1.5, borderRadius: 1.5, border: "1px solid", borderColor: "divider" }}
+                {(produitSelectionne.composants || []).map((composant) => (
+                  <Paper key={composant.id} variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{
+                        px: 2,
+                        py: 1.25,
+                        bgcolor: "action.hover",
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                        width: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, pr: 1, minWidth: 0 }} noWrap>
+                        Composant {composant.ordre} — {composant.designation}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => demanderSuppression("composant", composant.id, composant.designation)}
+                        sx={{ flexShrink: 0, ml: "auto" }}
                       >
-                        {/* Composant header */}
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                            Composant {composant.ordre} — {composant.designation}
-                          </Typography>
-                          <IconButton size="small" color="error"
-                            onClick={() => demanderSuppression("composant", composant.id, composant.designation)}
-                          >
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Stack>
-
-                        <Grid container spacing={1.5}>
-                          {/* Matières premières column */}
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
-                              Matières premières
-                            </Typography>
-                            {composant.lignes_matiere_premiere.length === 0 && (
-                              <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.5 }}>
-                                Aucune matière définie.
-                              </Typography>
-                            )}
-                            {composant.lignes_matiere_premiere.map((l) => (
-                              <Stack key={l.id} direction="column" sx={{ py: 0.2 }}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
-                                    {l.article_designation} — {l.quantite_unitaire} {l.article_unite}/ex
-                                  </Typography>
-                                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                                    <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
-                                    <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)} sx={{ width: 22, height: 22 }}>
-                                      <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                    </IconButton>
-                                  </Stack>
-                                </Stack>
-                                {l.formule_calcul && (
-                                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, fontStyle: "italic" }}>
-                                    Formule : {l.formule_calcul}
-                                  </Typography>
-                                )}
-                              </Stack>
-                            ))}
-                            <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }}>
-                              <TextField
-                                select size="small" label="Article"
-                                sx={{ minWidth: 110, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneMatiere[composant.id]?.article || ""}
-                                onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], article: e.target.value } }))}
-                              >
-                                {articles.map((a) => <MenuItem key={a.id} value={a.id} sx={{ fontSize: 12 }}>{a.designation}</MenuItem>)}
-                              </TextField>
-                              <TextField
-                                size="small" label="Qté" type="number"
-                                sx={{ width: 65, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneMatiere[composant.id]?.quantite_unitaire || ""}
-                                onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], quantite_unitaire: e.target.value } }))}
-                              />
-                              <TextField
-                                select size="small" label="Charge"
-                                sx={{ minWidth: 88, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneMatiere[composant.id]?.type_charge || "VARIABLE"}
-                                onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
-                              >
-                                <MenuItem value="VARIABLE" sx={{ fontSize: 12 }}>Variable</MenuItem>
-                                <MenuItem value="FIXE" sx={{ fontSize: 12 }}>Fixe</MenuItem>
-                              </TextField>
-                              <Button variant="contained" size="small" onClick={() => gererAjoutLigneMatiere(composant.id)} sx={{ minWidth: 32, px: 1 }}>
-                                <AddIcon fontSize="small" />
-                              </Button>
-                            </Stack>
-                            <TextField
-                              size="small" label="Formule de calcul (optionnel)"
-                              fullWidth
-                              sx={{ mt: 0.5, "& .MuiInputBase-root": { fontSize: 11 }, "& .MuiInputLabel-root": { fontSize: 11 } }}
-                              value={nouvelleLigneMatiere[composant.id]?.formule_calcul || ""}
-                              onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
-                            />
-                          </Grid>
-
-                          {/* Opérations column */}
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
-                              Opérations
-                            </Typography>
-                            {composant.lignes_operation.length === 0 && (
-                              <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.5 }}>
-                                Aucune opération définie.
-                              </Typography>
-                            )}
-                            {composant.lignes_operation.map((l) => (
-                              <Stack key={l.id} direction="column" sx={{ py: 0.2 }}>
-                                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                                  <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.6 }}>
-                                    {l.libelle} — {l.poste_nom} ({l.temps_unitaire} min/ex)
-                                  </Typography>
-                                  <Stack direction="row" alignItems="center" spacing={0.5}>
-                                    <Chip label={LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge} size="small" variant="outlined" sx={{ height: 16, fontSize: 10 }} />
-                                    <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)} sx={{ width: 22, height: 22 }}>
-                                      <DeleteOutlineIcon sx={{ fontSize: 12 }} />
-                                    </IconButton>
-                                  </Stack>
-                                </Stack>
-                                {l.formule_calcul && (
-                                  <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, fontStyle: "italic" }}>
-                                    Formule : {l.formule_calcul}
-                                  </Typography>
-                                )}
-                              </Stack>
-                            ))}
-                            <Stack direction="row" spacing={0.75} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
-                              <TextField
-                                size="small" label="Libellé"
-                                sx={{ minWidth: 85, flexGrow: 1, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneOperation[composant.id]?.libelle || ""}
-                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], libelle: e.target.value } }))}
-                              />
-                              <TextField
-                                select size="small" label="Poste"
-                                sx={{ minWidth: 95, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneOperation[composant.id]?.poste || ""}
-                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], poste: e.target.value } }))}
-                              >
-                                {postesDeCharge.map((p) => <MenuItem key={p.id} value={p.id} sx={{ fontSize: 12 }}>{p.nom}</MenuItem>)}
-                              </TextField>
-                              <TextField
-                                select size="small" label="Charge"
-                                sx={{ minWidth: 88, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneOperation[composant.id]?.type_charge || "VARIABLE"}
-                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
-                              >
-                                <MenuItem value="VARIABLE" sx={{ fontSize: 12 }}>Variable</MenuItem>
-                                <MenuItem value="FIXE" sx={{ fontSize: 12 }}>Fixe</MenuItem>
-                              </TextField>
-                              <TextField
-                                size="small" label="Min" type="number"
-                                sx={{ width: 58, "& .MuiInputBase-root": { fontSize: 12 }, "& .MuiInputLabel-root": { fontSize: 12 } }}
-                                value={nouvelleLigneOperation[composant.id]?.temps_unitaire || ""}
-                                onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], temps_unitaire: e.target.value } }))}
-                              />
-                              <Button variant="contained" size="small" onClick={() => gererAjoutLigneOperation(composant.id)} sx={{ minWidth: 32, px: 1 }}>
-                                <AddIcon fontSize="small" />
-                              </Button>
-                            </Stack>
-                            <TextField
-                              size="small" label="Formule de calcul (optionnel)"
-                              fullWidth
-                              sx={{ mt: 0.5, "& .MuiInputBase-root": { fontSize: 11 }, "& .MuiInputLabel-root": { fontSize: 11 } }}
-                              value={nouvelleLigneOperation[composant.id]?.formule_calcul || ""}
-                              onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
-                            />
-                            <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setDialoguePoste(true)} sx={{ mt: 0.75, px: 1.5, fontSize: 12 }}>
-                              + Poste de charge
-                            </Button>
-                          </Grid>
-                        </Grid>
-                      </Box>
-                    ))}
-
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}>
-                      <TextField
-                        size="small" label="Ordre" type="number" sx={{ width: 80 }}
-                        value={nouveauComposant.ordre}
-                        onChange={(e) => setNouveauComposant((s) => ({ ...s, ordre: e.target.value }))}
-                      />
-                      <TextField
-                        size="small" label="Désignation du composant" sx={{ flexGrow: 1 }}
-                        value={nouveauComposant.designation}
-                        onChange={(e) => setNouveauComposant((s) => ({ ...s, designation: e.target.value }))}
-                      />
-                      <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={gererAjoutComposant}>
-                        Ajouter
-                      </Button>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     </Stack>
-                  </Box>
-                )}
-            </Paper>
-          )}
+
+                    <Grid container>
+                      {/* Matières */}
+                      <Grid size={{ xs: 12, md: 6 }} sx={{ p: 2, borderRight: { md: "1px solid" }, borderBottom: { xs: "1px solid", md: 0 }, borderColor: "divider" }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                          Matières premières
+                        </Typography>
+                        <Stack spacing={1} sx={{ mt: 1.25, mb: 1.5 }}>
+                          {(composant.lignes_matiere_premiere || []).length === 0 ? (
+                            <Typography variant="caption" color="text.disabled">Aucune matière définie.</Typography>
+                          ) : (
+                            (composant.lignes_matiere_premiere || []).map((l) => (
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="flex-start"
+                                spacing={1}
+                                sx={{ width: "100%" }}
+                              >
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.article_designation}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {l.quantite_unitaire} {l.article_unite || ""}/ex · {LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge}
+                                  </Typography>
+                                  {l.formule_calcul && (
+                                    <Typography variant="caption" color="text.disabled" display="block" sx={{ fontStyle: "italic" }}>
+                                      Formule : {l.formule_calcul}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => demanderSuppression("ligneMatiere", l.id, l.article_designation)}
+                                  sx={{ flexShrink: 0, ml: "auto" }}
+                                >
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            ))
+                          )}
+                        </Stack>
+                        <Stack spacing={1} sx={{ p: 1.5, bgcolor: "grey.50", borderRadius: 1.5, border: "1px dashed", borderColor: "divider" }}>
+                          <TextField
+                            select size="small" fullWidth label="Article"
+                            value={nouvelleLigneMatiere[composant.id]?.article || ""}
+                            onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], article: e.target.value } }))}
+                          >
+                            {articles.map((a) => <MenuItem key={a.id} value={a.id}>{a.designation}</MenuItem>)}
+                          </TextField>
+                          <Stack direction="row" spacing={1}>
+                            <TextField
+                              size="small" label="Quantité" type="number" fullWidth
+                              value={nouvelleLigneMatiere[composant.id]?.quantite_unitaire || ""}
+                              onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], quantite_unitaire: e.target.value } }))}
+                            />
+                            <TextField
+                              select size="small" label="Charge" fullWidth
+                              value={nouvelleLigneMatiere[composant.id]?.type_charge || "VARIABLE"}
+                              onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
+                            >
+                              <MenuItem value="VARIABLE">Variable</MenuItem>
+                              <MenuItem value="FIXE">Fixe</MenuItem>
+                            </TextField>
+                          </Stack>
+                          <TextField
+                            size="small" fullWidth label="Formule de calcul (optionnel)"
+                            value={nouvelleLigneMatiere[composant.id]?.formule_calcul || ""}
+                            onChange={(e) => setNouvelleLigneMatiere((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
+                          />
+                          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => gererAjoutLigneMatiere(composant.id)}>
+                            Ajouter la matière
+                          </Button>
+                        </Stack>
+                      </Grid>
+
+                      {/* Opérations */}
+                      <Grid size={{ xs: 12, md: 6 }} sx={{ p: 2 }}>
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          alignItems="center"
+                          sx={{ width: "100%", mb: 0.5 }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: "text.secondary",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.4,
+                            }}
+                          >
+                            Opérations
+                          </Typography>
+                          <Button
+                            size="small"
+                            onClick={() => setDialoguePoste(true)}
+                            sx={{ fontSize: 11, flexShrink: 0, ml: "auto" }}
+                          >
+                            + Poste de charge
+                          </Button>
+                        </Stack>
+                        <Stack spacing={1} sx={{ mt: 1.25, mb: 1.5 }}>
+                          {(composant.lignes_operation || []).length === 0 ? (
+                            <Typography variant="caption" color="text.disabled">Aucune opération définie.</Typography>
+                          ) : (
+                            (composant.lignes_operation || []).map((l) => (
+                              <Stack key={l.id} direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600 }}>{l.libelle}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {l.poste_nom} · {l.temps_unitaire} min/ex · {LIBELLES_TYPE_CHARGE[l.type_charge] || l.type_charge}
+                                  </Typography>
+                                  {l.formule_calcul && (
+                                    <Typography variant="caption" color="text.disabled" display="block" sx={{ fontStyle: "italic" }}>
+                                      Formule : {l.formule_calcul}
+                                    </Typography>
+                                  )}
+                                </Box>
+                                <IconButton size="small" color="error" onClick={() => demanderSuppression("ligneOperation", l.id, l.libelle)}>
+                                  <DeleteOutlineIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            ))
+                          )}
+                        </Stack>
+                        <Stack spacing={1} sx={{ p: 1.5, bgcolor: "grey.50", borderRadius: 1.5, border: "1px dashed", borderColor: "divider" }}>
+                          <TextField
+                            size="small" fullWidth label="Libellé"
+                            value={nouvelleLigneOperation[composant.id]?.libelle || ""}
+                            onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], libelle: e.target.value } }))}
+                          />
+                          <Stack direction="row" spacing={1}>
+                            <TextField
+                              select size="small" label="Poste" fullWidth
+                              value={nouvelleLigneOperation[composant.id]?.poste || ""}
+                              onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], poste: e.target.value } }))}
+                            >
+                              {postesDeCharge.map((p) => <MenuItem key={p.id} value={p.id}>{p.nom}</MenuItem>)}
+                            </TextField>
+                            <TextField
+                              size="small" label="Temps (min)" type="number" fullWidth
+                              value={nouvelleLigneOperation[composant.id]?.temps_unitaire || ""}
+                              onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], temps_unitaire: e.target.value } }))}
+                            />
+                          </Stack>
+                          <TextField
+                            select size="small" label="Charge" fullWidth
+                            value={nouvelleLigneOperation[composant.id]?.type_charge || "VARIABLE"}
+                            onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], type_charge: e.target.value } }))}
+                          >
+                            <MenuItem value="VARIABLE">Variable</MenuItem>
+                            <MenuItem value="FIXE">Fixe</MenuItem>
+                          </TextField>
+                          <TextField
+                            size="small" fullWidth label="Formule de calcul (optionnel)"
+                            value={nouvelleLigneOperation[composant.id]?.formule_calcul || ""}
+                            onChange={(e) => setNouvelleLigneOperation((s) => ({ ...s, [composant.id]: { ...s[composant.id], formule_calcul: e.target.value } }))}
+                          />
+                          <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => gererAjoutLigneOperation(composant.id)}>
+                            Ajouter l&apos;opération
+                          </Button>
+                        </Stack>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ))}
+
+                <Paper variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Ajouter un composant</Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "center" }}>
+                    <TextField
+                      size="small" label="Ordre" type="number"
+                      sx={{ width: { xs: "100%", sm: 100 } }}
+                      value={nouveauComposant.ordre}
+                      onChange={(e) => setNouveauComposant((s) => ({ ...s, ordre: e.target.value }))}
+                    />
+                    <TextField
+                      size="small" label="Désignation du composant" fullWidth
+                      value={nouveauComposant.designation}
+                      onChange={(e) => setNouveauComposant((s) => ({ ...s, designation: e.target.value }))}
+                    />
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={gererAjoutComposant} sx={{ flexShrink: 0, whiteSpace: "nowrap" }}>
+                      Ajouter
+                    </Button>
+                  </Stack>
+                </Paper>
+              </Stack>
+            )}
+          </Grid>
         </Grid>
-      </Grid>
       </Box>
 
-      <Dialog open={dialogueFamille} onClose={() => setDialogueFamille(false)} maxWidth="xs">
-        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-            <PastilleIcone icone={<CategoryIcon sx={{ fontSize: 18 }} />} taille={32} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-              Nouvelle famille de produits
-            </Typography>
-          </Stack>
+      {/* Dialogues */}
+      <Dialog open={dialogueFamille} onClose={() => setDialogueFamille(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Nouvelle famille</Typography>
           <IconButton onClick={() => setDialogueFamille(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent dividers>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              select label="Nom" value={nouvelleFamille.nom}
-              onChange={(e) => setNouvelleFamille((s) => ({ ...s, nom: e.target.value }))}
-            >
-              {Object.entries(LIBELLES_FAMILLE).map(([code, libelle]) => (
-                <MenuItem key={code} value={code}>{libelle}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Type de structure (optionnel)" value={nouvelleFamille.structure_type}
-              onChange={(e) => setNouvelleFamille((s) => ({ ...s, structure_type: e.target.value }))}
-            />
-          </Stack>
+          <TextField
+            select fullWidth label="Famille" value={nouvelleFamille.nom}
+            onChange={(e) => setNouvelleFamille({ nom: e.target.value })}
+            sx={{ mt: 1 }}
+          >
+            {Object.entries(LIBELLES_FAMILLE).map(([code, libelle]) => (
+              <MenuItem key={code} value={code}>{libelle}</MenuItem>
+            ))}
+          </TextField>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setDialogueFamille(false)} sx={{ px: 1.5 }}>Annuler</Button>
-          <Button variant="contained" disableElevation onClick={gererCreationFamille}>Créer</Button>
+          <Button variant="outlined" onClick={() => setDialogueFamille(false)}>Annuler</Button>
+          <Button variant="contained" onClick={gererCreationFamille}>Créer</Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialogueProduit} onClose={() => setDialogueProduit(false)} maxWidth="xs">
-        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-            <PastilleIcone icone={<Inventory2Icon sx={{ fontSize: 18 }} />} taille={32} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-              Nouveau produit du catalogue
-            </Typography>
-          </Stack>
+      <Dialog open={dialogueProduit} onClose={() => setDialogueProduit(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Nouveau produit</Typography>
           <IconButton onClick={() => setDialogueProduit(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              select label="Famille" value={nouveauProduit.famille}
+              select fullWidth label="Famille" value={nouveauProduit.famille}
               onChange={(e) => setNouveauProduit((s) => ({ ...s, famille: e.target.value }))}
             >
               {familles.map((f) => (
@@ -739,53 +761,53 @@ export default function CataloguePage() {
               ))}
             </TextField>
             <TextField
-              label="Nom du produit" value={nouveauProduit.nom}
+              fullWidth label="Nom du produit" value={nouveauProduit.nom}
               onChange={(e) => setNouveauProduit((s) => ({ ...s, nom: e.target.value }))}
             />
             <TextField
-              label="Référence (optionnel)" value={nouveauProduit.reference || ""}
+              fullWidth label="Référence (optionnel)" value={nouveauProduit.reference || ""}
               onChange={(e) => setNouveauProduit((s) => ({ ...s, reference: e.target.value }))}
             />
             <Stack direction="row" spacing={2}>
               <TextField
-                label="Marge min (%)" type="number" fullWidth
-                value={nouveauProduit.marge_min || ""}
+                fullWidth label="Marge min (%)" type="number" value={nouveauProduit.marge_min || ""}
                 onChange={(e) => setNouveauProduit((s) => ({ ...s, marge_min: e.target.value }))}
               />
               <TextField
-                label="Marge max (%)" type="number" fullWidth
-                value={nouveauProduit.marge_max || ""}
+                fullWidth label="Marge max (%)" type="number" value={nouveauProduit.marge_max || ""}
                 onChange={(e) => setNouveauProduit((s) => ({ ...s, marge_max: e.target.value }))}
               />
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setDialogueProduit(false)} sx={{ px: 1.5 }}>Annuler</Button>
-          <Button variant="contained" disableElevation disabled={!nouveauProduit.famille || !nouveauProduit.nom} onClick={gererCreationProduit}>
+          <Button variant="outlined" onClick={() => setDialogueProduit(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            disabled={!nouveauProduit.famille || !nouveauProduit.nom}
+            onClick={gererCreationProduit}
+          >
             Créer
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={dialoguePoste} onClose={() => setDialoguePoste(false)} maxWidth="xs">
+      <Dialog open={dialoguePoste} onClose={() => setDialoguePoste(false)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
             <PastilleIcone icone={<PrecisionManufacturingIcon sx={{ fontSize: 18 }} />} taille={32} />
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-              Nouveau poste de charge
-            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Nouveau poste de charge</Typography>
           </Stack>
           <IconButton onClick={() => setDialoguePoste(false)} size="small"><CloseIcon fontSize="small" /></IconButton>
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-              label="Nom" value={nouveauPoste.nom}
+              fullWidth label="Nom" value={nouveauPoste.nom}
               onChange={(e) => setNouveauPoste((s) => ({ ...s, nom: e.target.value }))}
             />
             <TextField
-              select label="Type de poste" value={nouveauPoste.type_poste}
+              select fullWidth label="Type de poste" value={nouveauPoste.type_poste}
               onChange={(e) => setNouveauPoste((s) => ({ ...s, type_poste: e.target.value }))}
             >
               {Object.entries(LIBELLES_TYPE_POSTE).map(([code, libelle]) => (
@@ -793,18 +815,17 @@ export default function CataloguePage() {
               ))}
             </TextField>
             <TextField
-              label="Coût horaire" type="number" value={nouveauPoste.cout_horaire}
+              fullWidth label="Coût horaire" type="number" value={nouveauPoste.cout_horaire}
               onChange={(e) => setNouveauPoste((s) => ({ ...s, cout_horaire: e.target.value }))}
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button variant="outlined" onClick={() => setDialoguePoste(false)} sx={{ px: 1.5 }}>Annuler</Button>
-          <Button variant="contained" disableElevation onClick={gererCreationPoste}>Créer</Button>
+          <Button variant="outlined" onClick={() => setDialoguePoste(false)}>Annuler</Button>
+          <Button variant="contained" onClick={gererCreationPoste}>Créer</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Dialogue de confirmation : suppression */}
       <ConfirmDialog
         ouvert={Boolean(confirmationSuppression)}
         titre={
