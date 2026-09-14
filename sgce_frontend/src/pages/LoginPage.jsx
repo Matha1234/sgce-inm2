@@ -1,422 +1,10 @@
-// import { useEffect, useState } from "react";
-// import {
-//   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
-//   DialogTitle, Divider, IconButton, InputAdornment, Paper, Snackbar, Stack,
-//   TextField, Typography,
-// } from "@mui/material";
-// import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-// import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
-// import Visibility from "@mui/icons-material/Visibility";
-// import VisibilityOff from "@mui/icons-material/VisibilityOff";
-// import CloseIcon from "@mui/icons-material/Close";
-// import LockResetIcon from "@mui/icons-material/LockReset";
-// import MailOutlinedIcon from "@mui/icons-material/MailOutlined";
-// import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
-// import { useDispatch, useSelector } from "react-redux";
-// import { Navigate, useLocation, useNavigate } from "react-router-dom";
-
-// import { demanderReinitialisationMotDePasse, recupererProfil, seConnecter } from "../api/authApi";
-// import { setTokens, setUtilisateur } from "../store/authSlice";
-// import { PastilleIcone } from "../components/common/PageHeader";
-// import logoInm from "../assets/logo-inm.png";
-
-// const CLE_EVENEMENT_AUTH = "sgcfc_evenement_auth";
-
-// export default function LoginPage() {
-//   const dispatch = useDispatch();
-//   const navigate = useNavigate();
-//   const location = useLocation();
-//   const { estAuthentifie } = useSelector((state) => state.auth);
-
-//   const [username, setUsername] = useState("");
-//   const [password, setPassword] = useState("");
-//   const [motDePasseVisible, setMotDePasseVisible] = useState(false);
-//   const [erreur, setErreur] = useState("");
-//   const [enCours, setEnCours] = useState(false);
-//   const [messageDeconnexion, setMessageDeconnexion] = useState(false);
-
-//   const [dialogueMotDePasseOublie, setDialogueMotDePasseOublie] = useState(false);
-//   const [emailReinitialisation, setEmailReinitialisation] = useState("");
-//   const [envoiReinitialisation, setEnvoiReinitialisation] = useState(false);
-//   const [reinitialisationEnvoyee, setReinitialisationEnvoyee] = useState(false);
-//   const [erreurReinitialisation, setErreurReinitialisation] = useState("");
-
-//   useEffect(() => {
-//     const brut = sessionStorage.getItem(CLE_EVENEMENT_AUTH);
-//     if (brut) {
-//       try {
-//         const evenement = JSON.parse(brut);
-//         if (evenement?.type === "deconnexion") {
-//           setMessageDeconnexion(true);
-//           sessionStorage.removeItem(CLE_EVENEMENT_AUTH);
-//         }
-//       } catch {
-//         sessionStorage.removeItem(CLE_EVENEMENT_AUTH);
-//       }
-//     }
-//   }, []);
-
-//   if (estAuthentifie) {
-//     const destination = location.state?.from?.pathname || "/";
-//     return <Navigate to={destination} replace />;
-//   }
-
-//   const gererSoumission = async (evenement) => {
-//     evenement.preventDefault();
-//     setErreur("");
-//     setEnCours(true);
-//     try {
-//       const { access, refresh } = await seConnecter(username, password);
-//       dispatch(setTokens({ access, refresh }));
-//       const profil = await recupererProfil();
-//       dispatch(setUtilisateur(profil));
-//       sessionStorage.setItem(
-//         CLE_EVENEMENT_AUTH,
-//         JSON.stringify({ type: "connexion", nom: profil?.first_name || profil?.username || "" })
-//       );
-//       navigate("/", { replace: true });
-//     } catch (err) {
-//       if (err.response && err.response.status === 401) {
-//         setErreur("Identifiant ou mot de passe incorrect.");
-//       } else {
-//         setErreur("Impossible de contacter le serveur. Vérifiez que le backend est démarré.");
-//       }
-//     } finally {
-//       setEnCours(false);
-//     }
-//   };
-
-//   const gererDemandeReinitialisation = async (evenement) => {
-//     evenement.preventDefault();
-//     setErreurReinitialisation("");
-//     setEnvoiReinitialisation(true);
-//     try {
-//       await demanderReinitialisationMotDePasse(emailReinitialisation);
-//       setReinitialisationEnvoyee(true);
-//     } catch (err) {
-//       if (err.response && err.response.status === 404) {
-//         setErreurReinitialisation("Aucun compte actif n'est associé à cette adresse email.");
-//       } else {
-//         setErreurReinitialisation("Impossible d'envoyer l'email. Veuillez réessayer plus tard.");
-//       }
-//     } finally {
-//       setEnvoiReinitialisation(false);
-//     }
-//   };
-
-//   const fermerDialogueMotDePasseOublie = () => {
-//     setDialogueMotDePasseOublie(false);
-//     setEmailReinitialisation("");
-//     setReinitialisationEnvoyee(false);
-//     setErreurReinitialisation("");
-//   };
-
-//   return (
-//     <Box
-//       sx={{
-//         minHeight: "100vh",
-//         display: "flex",
-//         alignItems: "stretch",
-//         justifyContent: "center",
-//         bgcolor: "background.default",
-//       }}
-//     >
-//       <Box
-//         sx={{
-//           display: "flex",
-//           width: "100%",
-//           maxWidth: 860,
-//           my: { xs: 0, md: 3 },
-//           borderRadius: { xs: 0, md: 3 },
-//           overflow: "hidden",
-//           boxShadow: { xs: "none", md: "0 20px 60px rgba(15, 40, 80, 0.18)" },
-//         }}
-//       >
-//         {/* Panneau de marque, masqué sur petit ecran */}
-//         <Box
-//           sx={{
-//             flex: "1 1 45%",
-//             display: { xs: "none", md: "flex" },
-//             flexDirection: "column",
-//             justifyContent: "space-between",
-//             p: 3.5,
-//             background:
-//               "linear-gradient(160deg, #0d3c73 0%, #123a63 45%, #7a1f2b 130%)",
-//             color: "#fff",
-//           }}
-//         >
-//           <Box sx={{ textAlign: "center" }}>
-//             <Box
-//               sx={{
-//                 bgcolor: "rgba(255,255,255,0.95)",
-//                 display: "inline-block",
-//                 borderRadius: 2,
-//                 px: 2,
-//                 py: 1.25,
-//                 mb: 3.5,
-//                 mx: "auto",
-//               }}
-//             >
-//               <Box component="img" src={logoInm} alt="Imprimerie Nationale de Madagascar" sx={{ width: 130, height: 44, objectFit: "contain" }} />
-//             </Box>
-
-//             <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.3, mb: 4.5, textAlign: "center" }}>
-//               Système de Gestion des Coûts,
-//               <br />
-//               de la Fabrication et du Contrôle du Prix de Revient
-//             </Typography>
-//             <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)", textAlign: "center" }}>
-//               Estimation intelligente des coûts, suivi de la fabrication en temps réel
-//               et contrôle systématique du prix de revient — Imprimerie
-//               Nationale de Madagascar.
-//             </Typography>
-//           </Box>
-
-//           <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.6)" }}>
-//             © {new Date().getFullYear()} Imprimerie Nationale de Madagascar — Tous droits réservés.
-//           </Typography>
-//         </Box>
-
-//         {/* Panneau du formulaire */}
-//         <Paper
-//           elevation={0}
-//           square
-//           sx={{
-//             flex: "1 1 55%",
-//             display: "flex",
-//             flexDirection: "column",
-//             justifyContent: "center",
-//             px: { xs: 3, sm: 5, md: 5.5 },
-//             py: { xs: 4, md: 0 },
-//             bgcolor: "background.paper",
-//           }}
-//         >
-//           <Box sx={{ display: { xs: "flex", md: "none" }, justifyContent: "center", mb: 3 }}>
-//             <Box component="img" src={logoInm} alt="Imprimerie Nationale de Madagascar" sx={{ width: 100, height: 34, objectFit: "contain" }} />
-//           </Box>
-
-//           <Box sx={{ textAlign: "center", mb: 2.5 }}>
-//             <Box sx={{ display: "flex", justifyContent: "center", mb: 1.5 }}>
-//               <PastilleIcone icone={<LockOutlinedIcon sx={{ fontSize: 22 }} />} taille={52} />
-//             </Box>
-//             <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.25 }}>
-//               Connexion
-//             </Typography>
-//             <Typography variant="body2" color="text.secondary">
-//               Accédez à votre espace SGCFC-INM avec vos identifiants professionnels.
-//             </Typography>
-//           </Box>
-
-//           {erreur && (
-//             <Alert severity="error" sx={{ mb: 2 }}>
-//               {erreur}
-//             </Alert>
-//           )}
-
-//           <Box component="form" onSubmit={gererSoumission} noValidate>
-//             <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>
-//               Identifiant
-//             </Typography>
-//             <TextField
-//               placeholder="Votre nom d'utilisateur"
-//               size="medium"
-//               fullWidth
-//               value={username}
-//               onChange={(e) => setUsername(e.target.value)}
-//               autoFocus
-//               required
-//               slotProps={{
-//                 input: {
-//                   startAdornment: (
-//                     <InputAdornment position="start">
-//                       <PersonOutlineIcon color="action" />
-//                     </InputAdornment>
-//                   ),
-//                 },
-//               }}
-//             />
-
-//             <Typography variant="body2" sx={{ mt: 2, mb: 0.5, fontWeight: 500 }}>
-//               Mot de passe
-//             </Typography>
-//             <TextField
-//               placeholder="Votre mot de passe"
-//               type={motDePasseVisible ? "text" : "password"}
-//               size="medium"
-//               fullWidth
-//               value={password}
-//               onChange={(e) => setPassword(e.target.value)}
-//               required
-//               slotProps={{
-//                 input: {
-//                   startAdornment: (
-//                     <InputAdornment position="start">
-//                       <LockOutlinedIcon color="action" />
-//                     </InputAdornment>
-//                   ),
-//                   endAdornment: (
-//                     <InputAdornment position="end">
-//                       <IconButton
-//                         aria-label={motDePasseVisible ? "Masquer le mot de passe" : "Afficher le mot de passe"}
-//                         onClick={() => setMotDePasseVisible((v) => !v)}
-//                         edge="end"
-//                         tabIndex={-1}
-//                       >
-//                         {motDePasseVisible ? <VisibilityOff /> : <Visibility />}
-//                       </IconButton>
-//                     </InputAdornment>
-//                   ),
-//                 },
-//               }}
-//             />
-
-//             <Button
-//               type="submit"
-//               variant="contained"
-//               fullWidth
-//               size="large"
-//               sx={{
-//                 mt: 3,
-//                 py: 1.1,
-//                 fontWeight: 600,
-//                 textTransform: "none",
-//                 fontSize: "0.95rem",
-//                 boxShadow: "none",
-//               }}
-//               disabled={enCours}
-//             >
-//               {enCours ? "Connexion en cours..." : "Se connecter"}
-//             </Button>
-
-//             <Button
-//               type="button"
-//               size="small"
-//               fullWidth
-//               onClick={() => setDialogueMotDePasseOublie(true)}
-//               startIcon={<LockResetIcon sx={{ fontSize: 17 }} />}
-//               sx={{
-//                 mt: 1.25,
-//                 textTransform: "none",
-//                 fontSize: "0.82rem",
-//                 fontWeight: 500,
-//                 color: "text.secondary",
-//                 "&:hover": { color: "primary.main", bgcolor: "transparent" },
-//               }}
-//             >
-//               Mot de passe oublié ?
-//             </Button>
-//           </Box>
-
-//           <Divider sx={{ my: 3 }} />
-//           <Typography variant="caption" color="text.secondary" sx={{ textAlign: "center" }}>
-//             Accès réservé au personnel autorisé de l'Imprimerie Nationale de Madagascar.
-//             <br />
-//             En cas de difficulté de connexion, contactez l'Administrateur du système.
-//           </Typography>
-//         </Paper>
-//       </Box>
-
-//       <Dialog
-//         open={dialogueMotDePasseOublie}
-//         onClose={fermerDialogueMotDePasseOublie}
-//         maxWidth="xs"
-//         fullWidth
-//       >
-//         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
-//           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ minWidth: 0 }}>
-//             <PastilleIcone icone={<LockResetIcon sx={{ fontSize: 18 }} />} taille={32} />
-//             <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-//               Mot de passe oublié
-//             </Typography>
-//           </Stack>
-//           <IconButton onClick={fermerDialogueMotDePasseOublie} size="small"><CloseIcon fontSize="small" /></IconButton>
-//         </DialogTitle>
-//         <DialogContent dividers>
-//           {reinitialisationEnvoyee ? (
-//             <Box sx={{ textAlign: "center", py: 2 }}>
-//               <MarkEmailReadIcon sx={{ fontSize: 44, color: "success.main", mb: 1.5 }} />
-//               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-//                 Instructions envoyées
-//               </Typography>
-//               <Typography variant="body2" color="text.secondary">
-//                 Un email contenant un bouton « Choisir un nouveau mot de passe » vient
-//                 d'être envoyé à {emailReinitialisation}.
-//                 <br />
-//                 <br />
-//                 Le lien expire dans 30 minutes. Pensez à vérifier vos courriers indésirables.
-//               </Typography>
-//             </Box>
-//           ) : (
-//             <Box component="form" onSubmit={gererDemandeReinitialisation} noValidate>
-//               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-//                 Saisissez l'adresse email associée à votre compte : vous recevrez un email
-//                 avec un bouton pour choisir un nouveau mot de passe.
-//               </Typography>
-//               <TextField
-//                 placeholder="Votre adresse email"
-//                 type="email"
-//                 size="small"
-//                 fullWidth
-//                 autoFocus
-//                 required
-//                 value={emailReinitialisation}
-//                 onChange={(e) => setEmailReinitialisation(e.target.value)}
-//                 slotProps={{
-//                   input: {
-//                     startAdornment: (
-//                       <InputAdornment position="start">
-//                         <MailOutlinedIcon color="action" />
-//                       </InputAdornment>
-//                     ),
-//                   },
-//                 }}
-//               />
-//               {erreurReinitialisation && (
-//                 <Alert severity="error" sx={{ mt: 1.5 }}>{erreurReinitialisation}</Alert>
-//               )}
-//               <Button
-//                 type="submit"
-//                 variant="contained"
-//                 fullWidth
-//                 size="medium"
-//                 disabled={envoiReinitialisation}
-//                 sx={{ mt: 2, py: 0.9, fontWeight: 600, textTransform: "none", boxShadow: "none" }}
-//               >
-//                 {envoiReinitialisation ? (
-//                   <CircularProgress size={18} color="inherit" sx={{ mr: 1 }} />
-//                 ) : null}
-//                 {envoiReinitialisation ? "Envoi en cours..." : "Envoyer les instructions"}
-//               </Button>
-//             </Box>
-//           )}
-//         </DialogContent>
-//         <DialogActions sx={{ px: 3, pb: 2, justifyContent: "center" }}>
-//           <Button onClick={fermerDialogueMotDePasseOublie} variant={reinitialisationEnvoyee ? "contained" : "text"} sx={{ textTransform: "none" }}>
-//             {reinitialisationEnvoyee ? "Retour à la connexion" : "Annuler"}
-//           </Button>
-//         </DialogActions>
-//       </Dialog>
-
-//       <Snackbar
-//         open={messageDeconnexion}
-//         autoHideDuration={4000}
-//         onClose={() => setMessageDeconnexion(false)}
-//         anchorOrigin={{ vertical: "top", horizontal: "center" }}
-//       >
-//         <Alert severity="success" variant="filled" onClose={() => setMessageDeconnexion(false)}>
-//           Vous avez été déconnecté avec succès.
-//         </Alert>
-//       </Snackbar>
-//     </Box>
-//   );
-// }
-
 import { useEffect, useState } from "react";
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent,
   DialogTitle, IconButton, InputAdornment, keyframes, Paper, Snackbar, Stack,
-  TextField, Typography,
+  TextField, Typography, useTheme,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
 import Visibility from "@mui/icons-material/Visibility";
@@ -449,6 +37,8 @@ export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const theme = useTheme();
+  const sombre = theme.palette.mode === "dark";
   const { estAuthentifie } = useSelector((state) => state.auth);
 
   const [username, setUsername] = useState("");
@@ -534,6 +124,50 @@ export default function LoginPage() {
     setErreurReinitialisation("");
   };
 
+  // Couleurs dérivées du thème MUI (clair / sombre)
+  const primary = theme.palette.primary.main;
+  const primaryDark = theme.palette.primary.dark;
+  const fondPage = sombre
+    ? `linear-gradient(145deg, ${theme.palette.background.default} 0%, ${theme.palette.background.paper} 45%, ${alpha(primary, 0.18)} 100%)`
+    : `linear-gradient(145deg, #f0f4fa 0%, #dce6f2 45%, #c5d4e8 100%)`;
+
+  const orbe1 = sombre
+    ? `linear-gradient(135deg, ${alpha(primary, 0.28)}, ${alpha("#7b1fa2", 0.16)})`
+    : `linear-gradient(135deg, rgba(21,101,192,0.18), rgba(123,31,162,0.12))`;
+
+  const orbe2 = sombre
+    ? `linear-gradient(135deg, ${alpha(theme.palette.error.main, 0.18)}, ${alpha(primary, 0.14)})`
+    : `linear-gradient(135deg, rgba(183,28,28,0.12), rgba(21,101,192,0.1))`;
+
+  const carteBg = sombre
+    ? alpha(theme.palette.background.paper, 0.82)
+    : "rgba(255,255,255,0.55)";
+
+  const carteBorder = sombre
+    ? alpha(theme.palette.common.white, 0.1)
+    : "rgba(255,255,255,0.7)";
+
+  const carteOmbre = sombre
+    ? "0 24px 56px rgba(0, 0, 0, 0.55)"
+    : "0 20px 50px rgba(15, 40, 80, 0.14)";
+
+  const formulaireBg = sombre
+    ? alpha(theme.palette.background.paper, 0.95)
+    : "rgba(255,255,255,0.92)";
+
+  const champBg = sombre
+    ? alpha(theme.palette.common.white, 0.04)
+    : "#f7f9fc";
+
+  const gradientMarque = sombre
+    ? `linear-gradient(165deg, ${primaryDark} 0%, ${primary} 55%, #5c1822 130%)`
+    : "linear-gradient(165deg, #0d3a6e 0%, #1565c0 55%, #8e2434 130%)";
+
+  const gradientBouton = `linear-gradient(90deg, ${primary}, ${primaryDark})`;
+  const gradientBoutonHover = sombre
+    ? `linear-gradient(90deg, ${theme.palette.primary.light}, ${primary})`
+    : "linear-gradient(90deg, #1976d2, #1565c0)";
+
   return (
     <Box
       sx={{
@@ -545,7 +179,8 @@ export default function LoginPage() {
         py: 2.5,
         position: "relative",
         overflow: "hidden",
-        background: "linear-gradient(145deg, #f0f4fa 0%, #dce6f2 45%, #c5d4e8 100%)",
+        background: fondPage,
+        color: "text.primary",
       }}
     >
       <Box
@@ -556,7 +191,7 @@ export default function LoginPage() {
           borderRadius: "40% 60% 55% 45%",
           top: -80,
           left: -60,
-          background: "linear-gradient(135deg, rgba(21,101,192,0.18), rgba(123,31,162,0.12))",
+          background: orbe1,
           animation: `${drift} 12s ease-in-out infinite`,
           pointerEvents: "none",
         }}
@@ -569,7 +204,7 @@ export default function LoginPage() {
           borderRadius: "55% 45% 40% 60%",
           bottom: -70,
           right: -40,
-          background: "linear-gradient(135deg, rgba(183,28,28,0.12), rgba(21,101,192,0.1))",
+          background: orbe2,
           animation: `${drift} 15s ease-in-out infinite reverse`,
           pointerEvents: "none",
         }}
@@ -586,13 +221,14 @@ export default function LoginPage() {
           position: "relative",
           zIndex: 1,
           animation: `${fadeScale} 0.45s ease-out`,
-          boxShadow: "0 20px 50px rgba(15, 40, 80, 0.14)",
-          border: "1px solid rgba(255,255,255,0.7)",
-          bgcolor: "rgba(255,255,255,0.55)",
+          boxShadow: carteOmbre,
+          border: "1px solid",
+          borderColor: carteBorder,
+          bgcolor: carteBg,
           backdropFilter: "blur(12px)",
         }}
       >
-        {/* ——— Thème ——— */}
+        {/* Panneau marque */}
         <Box
           sx={{
             flex: "1 1 44%",
@@ -603,11 +239,12 @@ export default function LoginPage() {
             textAlign: "center",
             px: 3,
             py: 3,
-            background:
-              "linear-gradient(165deg, #0d3a6e 0%, #1565c0 55%, #8e2434 130%)",
-            color: "#fff",
+            background: gradientMarque,
+            color: theme.palette.primary.contrastText,
             position: "relative",
-            boxShadow: "inset -12px 0 18px -14px rgba(0,0,0,0.28)",
+            boxShadow: sombre
+              ? "inset -12px 0 18px -14px rgba(0,0,0,0.45)"
+              : "inset -12px 0 18px -14px rgba(0,0,0,0.28)",
           }}
         >
           <Box
@@ -639,7 +276,9 @@ export default function LoginPage() {
               px: 1.75,
               py: 1,
               mb: 2.5,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+              boxShadow: sombre
+                ? "0 8px 24px rgba(0,0,0,0.35)"
+                : "0 8px 24px rgba(0,0,0,0.15)",
             }}
           >
             <Box
@@ -650,14 +289,14 @@ export default function LoginPage() {
             />
           </Box>
 
-          <Typography sx={{ fontWeight: 800, fontSize: 18, letterSpacing: 0.3, mb: 0.75 }}>
+          <Typography sx={{ fontWeight: 800, fontSize: 18, letterSpacing: 0.3, mb: 0.75, color: "inherit" }}>
             SGCFC-INM
           </Typography>
           <Typography
             sx={{
               fontSize: 12.5,
               lineHeight: 1.55,
-              color: "rgba(255,255,255,0.9)",
+              color: alpha("#fff", 0.9),
               maxWidth: 250,
             }}
           >
@@ -671,18 +310,20 @@ export default function LoginPage() {
               px: 1.5,
               py: 0.6,
               borderRadius: 10,
-              border: "1px solid rgba(255,255,255,0.35)",
-              bgcolor: "rgba(255,255,255,0.1)",
+              border: "1px solid",
+              borderColor: alpha("#fff", 0.35),
+              bgcolor: alpha("#fff", 0.1),
               fontSize: 11,
               fontWeight: 600,
               letterSpacing: 0.4,
+              color: "inherit",
             }}
           >
             Espace sécurisé
           </Box>
         </Box>
 
-        {/* ——— Formulaire ——— */}
+        {/* Formulaire */}
         <Paper
           elevation={0}
           square
@@ -693,7 +334,9 @@ export default function LoginPage() {
             justifyContent: "center",
             px: { xs: 2.5, sm: 3.25 },
             py: 3,
-            bgcolor: "rgba(255,255,255,0.92)",
+            bgcolor: formulaireBg,
+            color: "text.primary",
+            backgroundImage: "none",
           }}
         >
           <Box sx={{ display: { xs: "flex", md: "none" }, justifyContent: "center", mb: 2 }}>
@@ -701,11 +344,15 @@ export default function LoginPage() {
               component="img"
               src={logoInm}
               alt="INM"
-              sx={{ width: 100, height: 34, objectFit: "contain" }}
+              sx={{
+                width: 100,
+                height: 34,
+                objectFit: "contain",
+                filter: sombre ? "brightness(1.08)" : "none",
+              }}
             />
           </Box>
 
-          {/* Icône centrée au-dessus de Bienvenue */}
           <Box
             sx={{
               display: "flex",
@@ -724,15 +371,15 @@ export default function LoginPage() {
                 borderRadius: 2,
                 display: "grid",
                 placeItems: "center",
-                background: "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)",
-                color: "#fff",
-                boxShadow: "0 6px 16px rgba(21,101,192,0.32)",
+                background: `linear-gradient(135deg, ${primary} 0%, ${primaryDark} 100%)`,
+                color: theme.palette.primary.contrastText,
+                boxShadow: `0 6px 16px ${alpha(primary, sombre ? 0.45 : 0.32)}`,
                 mb: 1,
               }}
             >
               <LockOutlinedIcon sx={{ fontSize: 24 }} />
             </Box>
-            <Typography sx={{ fontWeight: 800, fontSize: 18, mb: 0.3, textAlign: "center" }}>
+            <Typography sx={{ fontWeight: 800, fontSize: 18, mb: 0.3, textAlign: "center", color: "text.primary" }}>
               Bienvenue
             </Typography>
             <Typography
@@ -759,11 +406,12 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
               required
+              autoComplete="username"
               sx={{
                 mb: 1.5,
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 2,
-                  bgcolor: "#f7f9fc",
+                  bgcolor: champBg,
                 },
               }}
               slotProps={{
@@ -785,11 +433,12 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               sx={{
                 mb: 0.5,
                 "& .MuiOutlinedInput-root": {
                   borderRadius: 2,
-                  bgcolor: "#f7f9fc",
+                  bgcolor: champBg,
                 },
               }}
               slotProps={{
@@ -806,6 +455,7 @@ export default function LoginPage() {
                         edge="end"
                         tabIndex={-1}
                         size="small"
+                        sx={{ color: "text.secondary" }}
                       >
                         {motDePasseVisible ? (
                           <VisibilityOff sx={{ fontSize: 18 }} />
@@ -823,7 +473,13 @@ export default function LoginPage() {
               <Button
                 size="small"
                 onClick={() => setDialogueMotDePasseOublie(true)}
-                sx={{ textTransform: "none", fontSize: 12, fontWeight: 600, px: 0.5 }}
+                sx={{
+                  textTransform: "none",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  px: 0.5,
+                  color: "primary.main",
+                }}
               >
                 Mot de passe oublié ?
               </Button>
@@ -832,6 +488,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               variant="contained"
+              color="primary"
               fullWidth
               disabled={enCours || !username.trim() || !password}
               sx={{
@@ -841,11 +498,20 @@ export default function LoginPage() {
                 fontSize: 13.5,
                 textTransform: "none",
                 letterSpacing: 0.2,
-                boxShadow: "0 6px 16px rgba(21,101,192,0.28)",
-                background: "linear-gradient(90deg, #1565c0, #0d47a1)",
+                boxShadow: `0 6px 16px ${alpha(primary, sombre ? 0.4 : 0.28)}`,
+                background: gradientBouton,
+                color: theme.palette.primary.contrastText,
                 "&:hover": {
-                  background: "linear-gradient(90deg, #1976d2, #1565c0)",
-                  boxShadow: "0 8px 20px rgba(21,101,192,0.35)",
+                  background: gradientBoutonHover,
+                  boxShadow: `0 8px 20px ${alpha(primary, sombre ? 0.5 : 0.35)}`,
+                },
+                "&.Mui-disabled": {
+                  background: sombre
+                    ? alpha(theme.palette.common.white, 0.12)
+                    : undefined,
+                  color: sombre
+                    ? alpha(theme.palette.common.white, 0.35)
+                    : undefined,
                 },
               }}
             >
@@ -854,7 +520,6 @@ export default function LoginPage() {
             </Button>
           </Box>
 
-          {/* Copyright centré sous le formulaire */}
           <Typography
             variant="caption"
             color="text.disabled"
@@ -876,10 +541,25 @@ export default function LoginPage() {
         onClose={fermerDialogueMotDePasseOublie}
         fullWidth
         maxWidth="xs"
-        PaperProps={{ sx: { borderRadius: 2.5 } }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2.5,
+            bgcolor: "background.paper",
+            backgroundImage: "none",
+            border: "1px solid",
+            borderColor: "divider",
+          },
+        }}
       >
         <DialogTitle
-          sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", py: 1.5, px: 2 }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            py: 1.5,
+            px: 2,
+            color: "text.primary",
+          }}
         >
           <Stack direction="row" alignItems="center" spacing={1}>
             <LockResetIcon color="primary" sx={{ fontSize: 22 }} />
@@ -887,15 +567,15 @@ export default function LoginPage() {
               Réinitialiser le mot de passe
             </Typography>
           </Stack>
-          <IconButton onClick={fermerDialogueMotDePasseOublie} size="small">
+          <IconButton onClick={fermerDialogueMotDePasseOublie} size="small" sx={{ color: "text.secondary" }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent dividers sx={{ px: 2, py: 2 }}>
+        <DialogContent dividers sx={{ px: 2, py: 2, borderColor: "divider" }}>
           {reinitialisationEnvoyee ? (
             <Stack alignItems="center" spacing={1.25} sx={{ py: 1 }}>
               <MarkEmailReadIcon color="success" sx={{ fontSize: 42 }} />
-              <Typography variant="body2" textAlign="center" sx={{ fontWeight: 600 }}>
+              <Typography variant="body2" textAlign="center" sx={{ fontWeight: 600, color: "text.primary" }}>
                 Instructions envoyées
               </Typography>
               <Typography variant="caption" color="text.secondary" textAlign="center">
@@ -918,7 +598,13 @@ export default function LoginPage() {
                 required
                 value={emailReinitialisation}
                 onChange={(e) => setEmailReinitialisation(e.target.value)}
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 1.5 } }}
+                autoComplete="email"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 1.5,
+                    bgcolor: champBg,
+                  },
+                }}
                 slotProps={{
                   input: {
                     startAdornment: (
@@ -937,6 +623,7 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 variant="contained"
+                color="primary"
                 fullWidth
                 size="small"
                 disabled={envoiReinitialisation}
@@ -954,6 +641,7 @@ export default function LoginPage() {
           <Button
             onClick={fermerDialogueMotDePasseOublie}
             variant={reinitialisationEnvoyee ? "contained" : "text"}
+            color="primary"
             size="small"
             sx={{ textTransform: "none", borderRadius: 1.5 }}
           >
