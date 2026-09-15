@@ -61,13 +61,12 @@ function normaliser(donnees) {
 
 export default function StockPage() {
   const { utilisateur } = useSelector((state) => state.auth);
-  const { afficherSucces } = useNotifier();
+  const { afficherSucces, afficherErreur } = useNotifier();
   const peutGererStock = utilisateur?.role === "ADMIN" || utilisateur?.role === "MAGASINIER";
 
   const [articles, setArticles] = useState([]);
   const [mouvements, setMouvements] = useState([]);
   const [chargement, setChargement] = useState(true);
-  const [erreur, setErreur] = useState("");
   const [recherche, setRecherche] = useState("");
   const [page, setPage] = useState(0);
   const [surPage, setSurPage] = useState(5);
@@ -99,7 +98,7 @@ export default function StockPage() {
         setArticles(listeArticles);
         setMouvements(listeMouvements);
       })
-      .catch(() => setErreur("Impossible de charger le stock."))
+      .catch(() => afficherErreur("Impossible de charger le stock."))
       .finally(() => setChargement(false));
   };
 
@@ -154,7 +153,6 @@ export default function StockPage() {
 
   const gererEnregistrementArticle = async () => {
     setEnCoursArticle(true);
-    setErreur("");
     try {
       const donnees = {
         designation: formulaireArticle.designation.trim(), emplacement_stock: (formulaireArticle.emplacement_stock || "").trim(),
@@ -172,7 +170,7 @@ export default function StockPage() {
     } catch (err) {
       const donnees = err.response?.data;
       const premierMessage = donnees ? Object.values(donnees)[0] : null;
-      setErreur(Array.isArray(premierMessage) ? premierMessage[0] : premierMessage || "Impossible d'enregistrer cet article.");
+      afficherErreur(Array.isArray(premierMessage) ? premierMessage[0] : premierMessage || "Impossible d'enregistrer cet article.");
     } finally { setEnCoursArticle(false); }
   };
 
@@ -189,11 +187,10 @@ export default function StockPage() {
     setConfirmationMouvement(false);
     if (!quantiteMouvement || Number(quantiteMouvement) <= 0) return;
     if (typeMouvement === "SORTIE" && !dossierMouvementId) {
-      setErreur("Une sortie physique doit être rattachée à un dossier de fabrication.");
+      afficherErreur("Une sortie physique doit être rattachée à un dossier de fabrication.");
       return;
     }
     setEnCoursMouvement(true);
-    setErreur("");
     try {
       const payload = {
         article: articleSelectionne.id,
@@ -213,11 +210,11 @@ export default function StockPage() {
     } catch (err) {
       const donnees = err.response?.data;
       const extraire = (v) => (Array.isArray(v) ? v[0] : v);
-      if (donnees?.quantite) setErreur(extraire(donnees.quantite));
-      else if (donnees?.dossier) setErreur(extraire(donnees.dossier));
-      else if (donnees?.detail) setErreur(extraire(donnees.detail));
-      else if (typeof donnees === "string") setErreur(donnees);
-      else setErreur("Impossible d'enregistrer ce mouvement.");
+      if (donnees?.quantite) afficherErreur(extraire(donnees.quantite));
+      else if (donnees?.dossier) afficherErreur(extraire(donnees.dossier));
+      else if (donnees?.detail) afficherErreur(extraire(donnees.detail));
+      else if (typeof donnees === "string") afficherErreur(donnees);
+      else afficherErreur("Impossible d'enregistrer ce mouvement.");
     } finally { setEnCoursMouvement(false); }
   };
 
@@ -232,7 +229,6 @@ export default function StockPage() {
         titreVariant="h6"
       />
 
-      {erreur && <Alert severity="error" sx={{ mb: 2, flexShrink: 0 }} onClose={() => setErreur("")}>{erreur}</Alert>}
 
       {articlesEnAlerte.length > 0 && (
         <Card sx={{ mb: 1.5, borderLeft: 4, borderColor: "error.main", boxShadow: 1, flexShrink: 0 }}>

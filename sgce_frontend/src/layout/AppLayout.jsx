@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppBar, Avatar, Badge, Box, Button, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, Divider, Drawer, IconButton, List, ListItemButton, ListItemIcon,
+  DialogContent, Divider, Drawer, IconButton, keyframes, List, ListItemButton, ListItemIcon,
   ListItemText, Menu, MenuItem, Stack, Toolbar, Tooltip, Typography,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -55,10 +55,29 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import { useNotifier } from "../components/common/Notifier";
 import logoInm from "../assets/logo-inm.png";
 
-const LARGEUR_SIDEBAR_OUVERTE = 196;
-const LARGEUR_SIDEBAR_REDUITE = 56;
+const LARGEUR_SIDEBAR_OUVERTE = 180;
+const LARGEUR_SIDEBAR_REDUITE = 52;
 const CLE_SIDEBAR = "sgcfc_sidebar_ouverte";
 const CLE_EVENEMENT_AUTH = "sgcfc_evenement_auth";
+
+const navFadeIn = keyframes`
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+const navShimmer = keyframes`
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+`;
+
+const sideItemIn = keyframes`
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+`;
+
+const HAUTEUR_NAV = { xs: 44, sm: 46 };
+
 
 const ELEMENTS_MENU = [
   { label: "Tableau de bord", to: "/", icon: <DashboardIcon />, roles: null },
@@ -272,45 +291,93 @@ export default function AppLayout() {
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
       {/* ===== Barre supérieure ===== */}
+      {/* Navbar 2 — bleu nuit + liseré animé */}
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          backgroundImage: (theme) =>
-            `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
-          borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
-          boxShadow: "0 1px 6px rgba(13, 60, 115, 0.3)",
+          background: (theme) =>
+            theme.palette.mode === "dark"
+              ? `linear-gradient(90deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.primary.dark, 0.55)} 100%)`
+              : "linear-gradient(90deg, #0b2d4d 0%, #134a7a 40%, #1a5f96 100%)",
+          backgroundSize: "200% 100%",
+          animation: `${navFadeIn} 0.4s ease-out, ${navShimmer} 14s ease infinite`,
+          borderBottom: "none",
+          boxShadow: (theme) =>
+            theme.palette.mode === "dark"
+              ? "0 4px 20px rgba(0,0,0,0.45)"
+              : "0 4px 18px rgba(11, 45, 77, 0.28)",
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 2,
+            background: (theme) =>
+              `linear-gradient(90deg, transparent, ${theme.palette.primary.light}, ${alpha("#fff", 0.7)}, ${theme.palette.primary.light}, transparent)`,
+            backgroundSize: "200% 100%",
+            animation: `${navShimmer} 5s linear infinite`,
+            opacity: 0.85,
+          },
         }}
       >
-        <Toolbar sx={{ minHeight: 56, display: "flex", justifyContent: "space-between", gap: 2 }}>
-          <Stack direction="row" alignItems="center" spacing={1.25} sx={{ minWidth: 0 }}>
+        <Toolbar
+          variant="dense"
+          sx={{
+            minHeight: HAUTEUR_NAV,
+            height: HAUTEUR_NAV,
+            px: { xs: 1, sm: 1.75 },
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
             <Box
               component="img"
               src={logoInm}
               alt="Logo Imprimerie Nationale de Madagascar"
               sx={{
-                height: 34,
-                borderRadius: 1.5,
+                height: 26,
+                borderRadius: 1,
                 bgcolor: "#fff",
-                p: 0.5,
-                border: "2px solid #fff",
-                boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
+                p: 0.3,
+                boxShadow: "0 0 0 1px rgba(255,255,255,0.5), 0 2px 8px rgba(0,0,0,0.2)",
                 objectFit: "contain",
+                transition: "transform 0.2s ease",
+                "&:hover": { transform: "scale(1.05)" },
               }}
             />
             <Box sx={{ display: { xs: "none", sm: "block" }, minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 800, fontSize: 15.5, lineHeight: 1.15, color: "#fff", letterSpacing: 0.5 }}>
+              <Typography sx={{ fontWeight: 800, fontSize: 13, lineHeight: 1.1, color: "#fff", letterSpacing: 0.6 }}>
                 SGCFC-INM
               </Typography>
-              <Typography sx={{ fontSize: 10.5, lineHeight: 1.2, color: "rgba(255,255,255,0.75)" }} noWrap>
+              <Typography sx={{ fontSize: 9, lineHeight: 1.15, color: "rgba(255,255,255,0.7)", letterSpacing: 0.2 }} noWrap>
                 Imprimerie Nationale de Madagascar
               </Typography>
             </Box>
           </Stack>
-          <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,0.25)" }} />
 
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.2}
+            sx={{
+              ml: "auto",
+              "& .MuiIconButton-root": {
+                color: "rgba(255,255,255,0.92)",
+                width: 32,
+                height: 32,
+                transition: "background-color 0.2s, transform 0.15s",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.12)",
+                  transform: "translateY(-1px)",
+                },
+              },
+            }}
+          >
             <Tooltip title="Notifications">
               <IconButton color="inherit" size="small" onClick={(e) => setAncrageNotifs(e.currentTarget)}>
                 <Badge badgeContent={nonLues} color="error">
@@ -537,45 +604,55 @@ export default function AppLayout() {
               </MenuItem>
             </Menu>
 
-            {/* Profil : avatar à anneau blanc + identité complète */}
-            <Divider orientation="vertical" flexItem sx={{ borderColor: "rgba(255,255,255,0.25)", mx: 0.5 }} />
+            <Box
+              sx={{
+                width: 1,
+                height: 22,
+                mx: 0.5,
+                background: "linear-gradient(180deg, transparent, rgba(255,255,255,0.4), transparent)",
+              }}
+            />
             <Box
               onClick={(e) => setAncrageProfil(e.currentTarget)}
               sx={{
-                ml: 0.5,
                 display: "flex",
                 alignItems: "center",
-                gap: 1,
-                px: 1,
-                py: 0.5,
-                borderRadius: 2,
+                gap: 0.7,
+                px: 0.7,
+                py: 0.25,
+                borderRadius: 5,
                 cursor: "pointer",
-                transition: "background-color 0.15s",
-                "&:hover": { bgcolor: "rgba(255,255,255,0.12)" },
+                border: "1px solid rgba(255,255,255,0.18)",
+                bgcolor: "rgba(255,255,255,0.06)",
+                transition: "background-color 0.2s, border-color 0.2s, transform 0.15s",
+                "&:hover": {
+                  bgcolor: "rgba(255,255,255,0.14)",
+                  borderColor: "rgba(255,255,255,0.35)",
+                  transform: "translateY(-1px)",
+                },
               }}
             >
               <Avatar
                 src={utilisateur?.photo || undefined}
                 sx={{
-                  width: 32,
-                  height: 32,
+                  width: 26,
+                  height: 26,
                   bgcolor: couleurAvatar,
-                  fontSize: 13,
-                  border: "2px solid #fff",
-                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.25)",
+                  fontSize: 11,
+                  border: "1.5px solid #fff",
                 }}
               >
                 {initialesUtilisateur(utilisateur)}
               </Avatar>
-              <Box sx={{ display: { xs: "none", md: "block" }, minWidth: 0 }}>
-                <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: 13, lineHeight: 1.25 }} noWrap>
+              <Box sx={{ display: { xs: "none", md: "block" }, minWidth: 0, maxWidth: 120 }}>
+                <Typography sx={{ color: "#fff", fontWeight: 700, fontSize: 11.5, lineHeight: 1.15 }} noWrap>
                   {nomComplet(utilisateur)}
                 </Typography>
-                <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: 10.5, lineHeight: 1.25 }} noWrap>
+                <Typography sx={{ color: "rgba(255,255,255,0.7)", fontSize: 9, lineHeight: 1.1 }} noWrap>
                   {LIBELLES_ROLES[utilisateur?.role] || utilisateur?.role}
                 </Typography>
               </Box>
-              <KeyboardArrowDownIcon sx={{ display: { xs: "none", md: "block" }, fontSize: 16, color: "rgba(255,255,255,0.7)" }} />
+              <KeyboardArrowDownIcon sx={{ display: { xs: "none", md: "block" }, fontSize: 14, color: "rgba(255,255,255,0.75)" }} />
             </Box>
             <Menu
               anchorEl={ancrageProfil}
@@ -686,7 +763,7 @@ export default function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* ===== Barre latérale ===== */}
+      {/* ===== Sidebar v1 — claire, barre + point éloigné du libellé ===== */}
       <Drawer
         variant="permanent"
         sx={{
@@ -696,7 +773,7 @@ export default function AppLayout() {
           transition: (theme) =>
             theme.transitions.create("width", {
               easing: theme.transitions.easing.easeInOut,
-              duration: 100,
+              duration: 180,
             }),
           [`& .MuiDrawer-paper`]: {
             width: largeurSidebar,
@@ -704,44 +781,59 @@ export default function AppLayout() {
             overflowX: "hidden",
             display: "flex",
             flexDirection: "column",
-            borderRight: "1px solid rgba(13, 60, 115, 0.08)",
+            borderRight: (theme) =>
+              `1px solid ${theme.palette.mode === "dark" ? alpha("#fff", 0.08) : alpha("#0d3c73", 0.1)}`,
+            background: (theme) =>
+              theme.palette.mode === "dark"
+                ? `linear-gradient(180deg, ${theme.palette.background.paper} 0%, ${alpha(theme.palette.primary.dark, 0.15)} 100%)`
+                : `linear-gradient(180deg, #ffffff 0%, ${alpha("#1565c0", 0.04)} 100%)`,
             transition: (theme) =>
               theme.transitions.create("width", {
                 easing: theme.transitions.easing.easeInOut,
-                duration: 100,
+                duration: 180,
               }),
           },
         }}
       >
-        <Toolbar sx={{ minHeight: 56 }} />
+        <Toolbar variant="dense" sx={{ minHeight: HAUTEUR_NAV }} />
 
-        {/* Bascule réduire / étendre (icône seule, collée au bord droit) */}
         <Box
-          onClick={basculerSidebar}
           sx={{
-            alignSelf: "flex-end",
-            mr: 1.25,
-            mb: 0.75,
-            width: 30,
-            height: 30,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 1.5,
-            cursor: "pointer",
-            color: "text.secondary",
-            border: "1px solid",
-            borderColor: "divider",
-            transition: "background-color 0.15s",
-            "&:hover": { bgcolor: "action.hover" },
-            "&:active": { bgcolor: "action.selected" },
+            justifyContent: sidebarOuverte ? "flex-end" : "center",
+            px: sidebarOuverte ? 1 : 0.5,
+            pt: 0.5,
+            pb: 0.75,
           }}
         >
-          {sidebarOuverte ? <ChevronLeftIcon fontSize="small" /> : <MenuIcon fontSize="small" />}
+          <Box
+            onClick={basculerSidebar}
+            sx={{
+              width: 26,
+              height: 26,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 1.25,
+              cursor: "pointer",
+              color: "text.secondary",
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+              transition: "background-color 0.2s, color 0.2s, transform 0.15s",
+              "&:hover": {
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
+                color: "primary.main",
+                transform: "scale(1.05)",
+              },
+            }}
+          >
+            {sidebarOuverte ? <ChevronLeftIcon sx={{ fontSize: 18 }} /> : <MenuIcon sx={{ fontSize: 18 }} />}
+          </Box>
         </Box>
 
-        <List sx={{ px: 1 }}>
-          {menuVisible.map((item) => {
+        <List sx={{ px: sidebarOuverte ? 0.75 : 0.5, py: 0.5, flex: 1, gap: 0 }}>
+          {menuVisible.map((item, index) => {
             const bouton = (
               <ListItemButton
                 key={item.to}
@@ -749,30 +841,62 @@ export default function AppLayout() {
                 to={item.to}
                 end={item.to === "/"}
                 sx={{
-                  minHeight: 40,
-                  mb: 0.5,
-                  borderRadius: 2,
+                  /* hauteur + espacement entre boutons */
+                  minHeight: 44,
+                  py: 1,
+                  mb: 1.1,
+                  borderRadius: 1.5,
                   justifyContent: sidebarOuverte ? "flex-start" : "center",
-                  px: sidebarOuverte ? 1.25 : 0,
-                  gap: 0.5,
-                  color: "text.primary",
-                  transition: "background-color 0.15s, transform 0.1s",
-                  "&:hover": { bgcolor: (t) => alpha(t.palette.primary.main, 0.1) },
-                  "&:active": { transform: "scale(0.98)" },
+                  px: sidebarOuverte ? 1 : 0.5,
+                  /* large marge droite : texte et point bien séparés */
+                  pr: sidebarOuverte ? 3 : 0.5,
+                  gap: 0.85,
+                  color: "text.secondary",
+                  position: "relative",
+                  overflow: "hidden",
+                  animation: `${sideItemIn} 0.3s ease-out ${Math.min(index, 8) * 0.04}s both`,
+                  transition: "background-color 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s",
+                  "&:hover": {
+                    bgcolor: (th) => alpha(th.palette.primary.main, 0.08),
+                    color: "primary.main",
+                    transform: "translateX(2px)",
+                  },
                   "&.active": {
-                    bgcolor: "primary.main",
-                    color: "primary.contrastText",
-                    boxShadow: "0 2px 6px rgba(21, 101, 192, 0.35)",
-                    "& .MuiListItemIcon-root": { color: "primary.contrastText" },
-                    "&:hover": { bgcolor: "primary.main" },
+                    bgcolor: (th) => alpha(th.palette.primary.main, 0.14),
+                    color: "primary.main",
+                    fontWeight: 700,
+                    boxShadow: (th) => `inset 3px 0 0 ${th.palette.primary.main}`,
+                    "& .MuiListItemIcon-root": { color: "primary.main" },
+                    /* point collé au bord droit de la sidebar */
+                    "&::after": sidebarOuverte
+                      ? {
+                          content: '""',
+                          position: "absolute",
+                          right: 8,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          bgcolor: "primary.main",
+                          boxShadow: (th) => `0 0 0 3px ${alpha(th.palette.primary.main, 0.2)}`,
+                        }
+                      : {},
+                  },
+                  "& .MuiListItemText-root": {
+                    margin: 0,
+                    /* espace réservé entre le libellé et le point */
+                    pr: sidebarOuverte ? 2 : 0,
+                    maxWidth: sidebarOuverte ? "calc(100% - 12px)" : "100%",
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    minWidth: sidebarOuverte ? 32 : "auto",
+                    minWidth: 0,
                     justifyContent: "center",
-                    color: "text.secondary",
+                    color: "inherit",
+                    "& .MuiSvgIcon-root": { fontSize: 18 },
                   }}
                 >
                   {item.icon}
@@ -780,7 +904,12 @@ export default function AppLayout() {
                 {sidebarOuverte && (
                   <ListItemText
                     primary={item.label}
-                    slotProps={{ primary: { fontSize: 13, fontWeight: 600 } }}
+                    primaryTypographyProps={{
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      noWrap: true,
+                      lineHeight: 1.25,
+                    }}
                   />
                 )}
               </ListItemButton>
@@ -795,55 +924,53 @@ export default function AppLayout() {
           })}
         </List>
 
-        <Box sx={{ flexGrow: 1 }} />
-
-        {/* Carte utilisateur en pied de sidebar */}
         <Box
           sx={{
-            m: 1,
-            mt: 0,
-            p: sidebarOuverte ? 1 : 0.75,
-            borderRadius: 2.5,
-            bgcolor: "action.hover",
+            mx: sidebarOuverte ? 0.75 : 0.5,
+            mb: 1,
+            mt: 0.5,
+            p: sidebarOuverte ? 0.85 : 0.55,
+            borderRadius: 2,
+            bgcolor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.12 : 0.06),
             border: "1px solid",
-            borderColor: "divider",
+            borderColor: (theme) => alpha(theme.palette.primary.main, 0.14),
           }}
         >
           {sidebarOuverte ? (
-            <Stack direction="row" alignItems="center" spacing={1.25}>
+            <Stack direction="row" alignItems="center" spacing={0.85}>
               <Avatar
                 src={utilisateur?.photo || undefined}
-                sx={{ width: 32, height: 32, bgcolor: couleurAvatar, fontSize: 13 }}
+                sx={{ width: 28, height: 28, bgcolor: couleurAvatar, fontSize: 11.5 }}
               >
                 {initialesUtilisateur(utilisateur)}
               </Avatar>
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                <Typography sx={{ fontWeight: 700, fontSize: 12, lineHeight: 1.2 }} noWrap>
                   {nomComplet(utilisateur)}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
+                <Typography sx={{ fontSize: 10, color: "text.secondary", lineHeight: 1.2 }} noWrap>
                   {LIBELLES_ROLES[utilisateur?.role] || utilisateur?.role}
                 </Typography>
               </Box>
               <Tooltip title="Déconnexion">
-                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main" }}>
-                  <LogoutIcon fontSize="small" />
+                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main", p: 0.4 }}>
+                  <LogoutIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
             </Stack>
           ) : (
-            <Stack alignItems="center" spacing={0.75}>
+            <Stack alignItems="center" spacing={0.5}>
               <Tooltip title={nomComplet(utilisateur)} placement="right">
                 <Avatar
                   src={utilisateur?.photo || undefined}
-                  sx={{ width: 32, height: 32, bgcolor: couleurAvatar, fontSize: 13 }}
+                  sx={{ width: 28, height: 28, bgcolor: couleurAvatar, fontSize: 11.5 }}
                 >
                   {initialesUtilisateur(utilisateur)}
                 </Avatar>
               </Tooltip>
               <Tooltip title="Déconnexion" placement="right">
-                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main" }}>
-                  <LogoutIcon fontSize="small" />
+                <IconButton size="small" onClick={demanderDeconnexion} sx={{ color: "error.main", p: 0.35 }}>
+                  <LogoutIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
             </Stack>
@@ -866,7 +993,7 @@ export default function AppLayout() {
             }),
         }}
       >
-        <Toolbar sx={{ minHeight: 56 }} />
+        <Toolbar variant="dense" sx={{ minHeight: HAUTEUR_NAV }} />
         <Outlet />
       </Box>
 
