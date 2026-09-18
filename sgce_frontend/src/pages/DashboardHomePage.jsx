@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert, Box, Button, Card, CardContent, CircularProgress, Grid,
-  IconButton, Paper, Stack, Tab, Tabs, Tooltip as TooltipMui, Typography
+  IconButton, Paper, Stack, Tab, Tabs, Tooltip as TooltipMui, Typography, keyframes,
 } from "@mui/material";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import AssignmentIcon from "@mui/icons-material/Assignment";
@@ -37,14 +37,25 @@ import {
 /* -------------------------------------------------------------------------- */
 /* Style commun des cadres                                                    */
 /* -------------------------------------------------------------------------- */
+const fadeUp = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+const softPulse = keyframes`
+  0%, 100% { box-shadow: 0 1px 4px rgba(15,35,60,.06); }
+  50%      { box-shadow: 0 2px 10px rgba(21,101,192,.12); }
+`;
+
 const CARD_BASE = {
   height: "100%",
   border: "1px solid",
   borderColor: "divider",
-  borderRadius: 2,
+  borderRadius: 1.5,
   bgcolor: "background.paper",
-  boxShadow: "0 1px 4px rgba(15,35,60,.06)",
-  transition: "box-shadow .15s, transform .15s",
+  boxShadow: "0 1px 3px rgba(15,35,60,.05)",
+  transition: "box-shadow .2s ease, transform .2s ease, border-color .2s ease",
+  animation: `${fadeUp} 0.4s ease-out both`,
 };
 
 const HEX = {
@@ -62,19 +73,32 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
       onClick={onClick}
       sx={{
         ...CARD_BASE,
-        minHeight: 150,
+        minHeight: 128,
         display: "flex",
         flexDirection: "column",
         cursor: onClick ? "pointer" : "default",
+        overflow: "hidden",
+        position: "relative",
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 3,
+          bgcolor: couleur,
+          opacity: 0.9,
+        },
         "&:hover": onClick ? {
-          transform: "translateY(-2px)",
-          boxShadow: "0 4px 12px rgba(15,35,60,.10)"
-        } : {}
+          transform: "translateY(-3px)",
+          boxShadow: `0 6px 16px ${alpha(couleur, 0.18)}`,
+          borderColor: alpha(couleur, 0.35),
+        } : {},
       }}
     >
       <CardContent
         sx={{
-          p: 2,
+          p: 1.15,
           flex: 1,
           display: "flex",
           flexDirection: "column",
@@ -83,18 +107,21 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
           textAlign: "center",
           width: "100%",
           boxSizing: "border-box",
-          "&:last-child": { pb: 2 }
+          "&:last-child": { pb: 1.15 },
         }}
       >
         <Box sx={{
-          width: 42,
-          height: 42,
-          borderRadius: 2,
+          width: 36,
+          height: 36,
+          borderRadius: 1.5,
           display: "grid",
           placeItems: "center",
-          bgcolor: alpha(couleur, 0.1),
+          bgcolor: alpha(couleur, 0.12),
           color: couleur,
-          mb: 0.7
+          mb: 0.55,
+          transition: "transform .2s ease",
+          ".MuiCard-root:hover &": { transform: "scale(1.08)" },
+          "& .MuiSvgIcon-root": { fontSize: 18 },
         }}>
           {icone}
         </Box>
@@ -105,10 +132,10 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
           sx={{
             fontWeight: 700,
             textTransform: "uppercase",
-            letterSpacing: 0.5,
+            letterSpacing: 0.4,
             fontSize: 11,
             width: "100%",
-            textAlign: "center"
+            textAlign: "center",
           }}
         >
           {titre}
@@ -116,13 +143,13 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
 
         <Typography
           sx={{
-            fontSize: 30,
+            fontSize: 26,
             lineHeight: 1.1,
             fontWeight: 800,
             color: couleur,
             width: "100%",
             textAlign: "center",
-            my: 0.3
+            my: 0.25,
           }}
         >
           {valeur}
@@ -134,7 +161,7 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
           sx={{
             fontSize: 11.5,
             width: "100%",
-            textAlign: "center"
+            textAlign: "center",
           }}
         >
           {sousTitre}
@@ -146,7 +173,7 @@ function CarteIndicateur({ titre, valeur, sousTitre, couleur, icone, onClick }) 
 
 function Panneau({ titre, sousTitre, children, action }) {
   return (
-    <Card sx={{ ...CARD_BASE, minHeight: 200, display: "flex", flexDirection: "column" }}>
+    <Card sx={{ ...CARD_BASE, minHeight: 220, display: "flex", flexDirection: "column" }}>
       <Box sx={{
         px: 1.75, py: 1.15,
         bgcolor: "action.hover",
@@ -154,7 +181,7 @@ function Panneau({ titre, sousTitre, children, action }) {
         borderColor: "divider",
         flexShrink: 0
       }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1.25}>
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 750, fontSize: 13.5, lineHeight: 1.3 }}>
               {titre}
@@ -172,7 +199,7 @@ function Panneau({ titre, sousTitre, children, action }) {
       {/* Contenu centré au milieu du cadre */}
       <Box
         sx={{
-          p: 1.5,
+          p: 1.35,
           flex: 1,
           display: "flex",
           alignItems: "center",
@@ -191,7 +218,7 @@ function Panneau({ titre, sousTitre, children, action }) {
 
 function MiniStatut({ label, value, couleur }) {
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ py: 0.5 }}>
       <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: couleur, flexShrink: 0 }} />
       <Typography variant="body2" sx={{ flex: 1, fontSize: 13 }}>{label}</Typography>
       <Typography variant="body2" sx={{ fontWeight: 750, fontSize: 13 }}>{value}</Typography>
@@ -411,15 +438,15 @@ export default function DashboardHomePage() {
       variant={variant}
       endIcon={<ArrowForwardIcon />}
       onClick={() => navigate(path)}
-      sx={{ justifyContent: "space-between", borderRadius: 2, py: 1.1 }}
+      sx={{ justifyContent: "space-between", borderRadius: 2, py: 1.15 }}
     >
       {label}
     </Button>
   );
 
   const resumeContenu = (
-    <Stack spacing={1.5}>
-      <Grid container spacing={1.5} alignItems="stretch">
+    <Stack spacing={1.25}>
+      <Grid container spacing={1.25} alignItems="stretch">
         {peutCommandes && (
           <Col size={{ xs: 12, sm: 6, lg: 3 }} minHeight={150}>
             {indicateur("Commandes", commandes.length, `${devisEnCours} devis en cours`,
@@ -448,7 +475,7 @@ export default function DashboardHomePage() {
         )}
       </Grid>
 
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={1.25} alignItems="stretch">
         {peutCommandes && (
           <Col size={{ xs: 12, lg: 4 }} minHeight={320}>
             {panneau("Répartition", "Statut des commandes",
@@ -471,12 +498,12 @@ export default function DashboardHomePage() {
         )}
         <Col size={{ xs: 12, lg: 4 }} minHeight={320}>
           {panneau("Accès rapides", "Navigation opérationnelle",
-            <Stack spacing={1} sx={{ width: "100%" }}>
+            <Stack spacing={1.25} sx={{ width: "100%" }}>
               {peutCommandes && action("Gérer les commandes", "/commandes", "contained")}
               {peutProduction && action("Suivre la production", "/dossiers")}
               {peutStock && action("Contrôler le stock", "/stock")}
               {peutRentabilite && action("Analyser la rentabilité", "/rentabilite")}
-              <Paper variant="outlined" sx={{ mt: 1, p: 1.5, borderRadius: 2, bgcolor: "action.hover", width: "100%" }}>
+              <Paper variant="outlined" sx={{ mt: 1, p: 1.35, borderRadius: 2, bgcolor: "action.hover", width: "100%" }}>
                 <Typography variant="caption" color="text.secondary">État du système</Typography>
                 <Stack spacing={0.25} sx={{ mt: 0.7 }}>
                   <MiniStatut label="Commandes" value={peutCommandes ? "Disponible" : "—"} couleur={palette.success} />
@@ -496,8 +523,8 @@ export default function DashboardHomePage() {
   );
 
   const commandesVue = (
-    <Stack spacing={1.5}>
-      <Grid container spacing={1.5} alignItems="stretch">
+    <Stack spacing={1.25}>
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, sm: 6, md: 4 }} minHeight={150}>
           {indicateur("Commandes", commandes.length, "commandes enregistrées",
             palette.primary, <AssignmentIcon fontSize="small" />)}
@@ -511,7 +538,7 @@ export default function DashboardHomePage() {
             palette.success, <AssessmentIcon fontSize="small" />)}
         </Col>
       </Grid>
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, md: 4 }} minHeight={320}>
           {panneau("Commandes par statut", "Répartition actuelle",
             <CarteDonutLegende titre="Statuts" segments={statutCommandeSegments} />)}
@@ -525,8 +552,8 @@ export default function DashboardHomePage() {
   );
 
   const productionVue = (
-    <Stack spacing={1.5}>
-      <Grid container spacing={1.5} alignItems="stretch">
+    <Stack spacing={1.25}>
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, sm: 6, md: 4 }} minHeight={150}>
           {indicateur("En production", dossiersEnCours.length, `sur ${dossiers.length} dossiers`,
             palette.warning, <PrecisionManufacturingIcon fontSize="small" />)}
@@ -540,7 +567,7 @@ export default function DashboardHomePage() {
             palette.violet, <PrecisionManufacturingIcon fontSize="small" />)}
         </Col>
       </Grid>
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, md: 4 }} minHeight={320}>
           {panneau("Statuts", "Dossiers de fabrication",
             <CarteDonutLegende titre="Dossiers par statut" segments={statutProductionSegments} />)}
@@ -565,8 +592,8 @@ export default function DashboardHomePage() {
   );
 
   const stockVue = (
-    <Stack spacing={1.5}>
-      <Grid container spacing={1.5} alignItems="stretch">
+    <Stack spacing={1.25}>
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, sm: 6, md: 4 }} minHeight={150}>
           {indicateur("Articles en alerte", articlesEnAlerte.length, `sur ${articles.length} articles`,
             articlesEnAlerte.length ? palette.error : palette.success,
@@ -581,7 +608,7 @@ export default function DashboardHomePage() {
             "niveau de stock normal", palette.success, <AssessmentIcon fontSize="small" />)}
         </Col>
       </Grid>
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, md: 8 }} minHeight={320}>
           {panneau("Niveaux de stock", "Articles les plus critiques",
             <CarteProgressionListe titre="" lignes={articlesProgression} />)}
@@ -609,8 +636,8 @@ export default function DashboardHomePage() {
   );
 
   const rentabiliteVue = (
-    <Stack spacing={1.5}>
-      <Grid container spacing={1.5} alignItems="stretch">
+    <Stack spacing={1.25}>
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, sm: 6, md: 4 }} minHeight={150}>
           {indicateur("Marge moyenne",
             `${rentabilite?.marge_moyenne_pourcentage ?? 0}%`,
@@ -629,7 +656,7 @@ export default function DashboardHomePage() {
             "fiches analysées", palette.violet, <AssessmentIcon fontSize="small" />)}
         </Col>
       </Grid>
-      <Grid container spacing={1.5} alignItems="stretch">
+      <Grid container spacing={1.25} alignItems="stretch">
         <Col size={{ xs: 12, md: 4 }} minHeight={320}>
           {panneau("Résultats de contrôle", "Répartition des marges",
             <CarteDonutLegende titre="Résultats" segments={rentabiliteSegments} />)}
@@ -669,7 +696,7 @@ export default function DashboardHomePage() {
   if (chargement) {
     return (
       <Box sx={{ minHeight: "calc(100vh - 112px)", display: "grid", placeItems: "center", py: 4 }}>
-        <Stack alignItems="center" spacing={1.5}>
+        <Stack alignItems="center" spacing={1.25}>
           <CircularProgress size={34} />
           <Typography variant="body2" color="text.secondary">
             Chargement du tableau de bord…
@@ -685,15 +712,16 @@ export default function DashboardHomePage() {
       minHeight: "calc(100vh - 112px)",
       height: "auto",
       overflow: "visible",
-      pb: 3
+      pb: 2,
     }}>
       <Card sx={{
         ...CARD_BASE,
-        borderRadius: 2,
-        mb: 1.5,
-        boxShadow: "0 1px 6px rgba(15,35,60,.07)"
+        borderRadius: 1.75,
+        mb: 1.15,
+        boxShadow: "0 1px 5px rgba(15,35,60,.06)",
+        animation: `${fadeUp} 0.35s ease-out both`,
       }}>
-        <CardContent sx={{ p: "12px 16px !important", "&:last-child": { pb: "12px !important" } }}>
+        <CardContent sx={{ p: "10px 14px !important", "&:last-child": { pb: "10px !important" } }}>
           <Box
             sx={{
               display: "flex",
@@ -706,18 +734,19 @@ export default function DashboardHomePage() {
             {/* Gauche */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, minWidth: 0 }}>
               <Box sx={{
-                width: 42, height: 42, borderRadius: 2,
+                width: 38, height: 38, borderRadius: 1.75,
                 display: "grid", placeItems: "center",
-                bgcolor: alpha(palette.primary, 0.1), color: palette.primary,
-                flexShrink: 0
+                bgcolor: alpha(palette.primary, 0.12), color: palette.primary,
+                flexShrink: 0,
+                "& .MuiSvgIcon-root": { fontSize: 22 },
               }}>
                 <DashboardIcon />
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.15 }}>
+                <Typography sx={{ fontWeight: 800, fontSize: 16, lineHeight: 1.15 }}>
                   Tableau de bord
                 </Typography>
-                <Typography variant="caption" color="text.secondary" noWrap>
+                <Typography sx={{ fontSize: 12, color: "text.secondary" }} noWrap>
                   Pilotage SGCFC-INM · espace {utilisateur?.role || "utilisateur"}
                 </Typography>
               </Box>
