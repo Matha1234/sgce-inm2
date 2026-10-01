@@ -3,13 +3,14 @@ import {
   Alert, Box, Button, CircularProgress, Dialog, DialogActions,
   DialogContent, DialogTitle, IconButton, MenuItem, Paper,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead,
-  TableRow, TextField, Typography,
+  TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import TableChartIcon from "@mui/icons-material/TableChart";
 import { useSelector } from "react-redux";
-
 import {
   creerFacture, listerDossiers, listerFactures, recupererCommande,
 } from "../api/commandesApi";
@@ -24,7 +25,6 @@ import { useHauteurCinqLignes } from "../utils/tableau";
 import BoutonExport from "../components/common/BoutonExport";
 
 const LIBELLES_TYPE = { PROFORMA: "Proforma", DEFINITIVE: "Définitive" };
-
 const COULEUR_TEXTE_TYPE = {
   PROFORMA: "info.main",
   DEFINITIVE: "success.main",
@@ -34,9 +34,21 @@ function normaliser(donnees) {
   return Array.isArray(donnees) ? donnees : donnees.results || [];
 }
 
+/** Colonnes communes pour l'export (liste ou facture unique). */
+function colonnesExport(e) {
+  return [
+    e.colonne("N° Facture", "numero_facture"),
+    e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
+    e.colonne("Dossier", "dossier_numero"),
+    e.colonne("Commande", "commande_numero"),
+    e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
+    e.colonnePerso("Date d'émission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
+  ];
+}
+
 export default function FacturesListPage() {
   const { utilisateur } = useSelector((state) => state.auth);
-  const { afficherSucces } = useNotifier();
+  const { afficherSucces, afficherErreur } = useNotifier();
   const peutEmettre = utilisateur?.role === "ADMIN" || utilisateur?.role === "AGENT_SDO";
 
   const [factures, setFactures] = useState([]);
@@ -55,6 +67,7 @@ export default function FacturesListPage() {
   const [enCours, setEnCours] = useState(false);
   const [erreurEnvoi, setErreurEnvoi] = useState("");
   const [confirmationEmission, setConfirmationEmission] = useState(false);
+  const [exportEnCoursId, setExportEnCoursId] = useState(null);
 
   const charger = () => {
     setChargement(true);
@@ -166,6 +179,53 @@ export default function FacturesListPage() {
     }
   };
 
+  /** Export PDF d'une seule facture */
+  const exporterFacturePdf = async (facture) => {
+    setExportEnCoursId(`${facture.id}-pdf`);
+    try {
+      const e = await import("../utils/exportateur");
+      const numero = facture.numero_facture || facture.id;
+      await e.exporterPDF({
+        fichier: `Facture_${numero}_${Date.now()}.pdf`,
+        titre: `Facture ${numero}`,
+        sousTitre: `${LIBELLES_TYPE[facture.type_facture] || facture.type_facture} — ${new Date(facture.date_facture).toLocaleDateString("fr-FR")}`,
+        meta: e.metaEdition(1),
+        colonnes: colonnesExport(e),
+        lignes: [facture],
+      });
+      afficherSucces(`Facture ${numero} exportée en PDF.`);
+    } catch {
+      afficherErreur("Impossible d'exporter cette facture en PDF.");
+    } finally {
+      setExportEnCoursId(null);
+    }
+  };
+
+  /** Export Excel d'une seule facture */
+  const exporterFactureExcel = async (facture) => {
+    setExportEnCoursId(`${facture.id}-xlsx`);
+    try {
+      const e = await import("../utils/exportateur");
+      const numero = facture.numero_facture || facture.id;
+      await e.exporterExcel({
+        fichier: `Facture_${numero}_${Date.now()}.xlsx`,
+        feuilles: [{
+          nom: "Facture",
+          titre: `Facture ${numero}`,
+          sousTitre: `${LIBELLES_TYPE[facture.type_facture] || facture.type_facture}`,
+          meta: e.metaEdition(1),
+          colonnes: colonnesExport(e),
+          lignes: [facture],
+        }],
+      });
+      afficherSucces(`Facture ${numero} exportée en Excel.`);
+    } catch {
+      afficherErreur("Impossible d'exporter cette facture en Excel.");
+    } finally {
+      setExportEnCoursId(null);
+    }
+  };
+
   return (
     <Box>
       <PageHeader
@@ -200,14 +260,7 @@ export default function FacturesListPage() {
               titre: "Liste des factures",
               sousTitre: recherche ? `Filtré : ${recherche}` : "",
               meta: e.metaEdition(facturesFiltrees.length),
-              colonnes: [
-                e.colonne("N° Facture", "numero_facture"),
-                e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
-                e.colonne("Dossier", "dossier_numero"),
-                e.colonne("Commande", "commande_numero"),
-                e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
-                e.colonnePerso("Date d'émission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
-              ],
+              colonnes: colonnesExport(e),
               lignes: facturesFiltrees,
             });
           }}
@@ -220,14 +273,7 @@ export default function FacturesListPage() {
                 titre: "Liste des factures",
                 sousTitre: recherche ? `Filtré : ${recherche}` : "",
                 meta: e.metaEdition(facturesFiltrees.length),
-                colonnes: [
-                  e.colonne("N° Facture", "numero_facture"),
-                  e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
-                  e.colonne("Dossier", "dossier_numero"),
-                  e.colonne("Commande", "commande_numero"),
-                  e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
-                  e.colonnePerso("Date d'émission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
-                ],
+                colonnes: colonnesExport(e),
                 lignes: facturesFiltrees,
               }],
             });
@@ -258,7 +304,6 @@ export default function FacturesListPage() {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  {/* Colonne # supprimée */}
                   <EnTeteTriable cle="numero_facture" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
                     N° Facture
                   </EnTeteTriable>
@@ -275,8 +320,11 @@ export default function FacturesListPage() {
                     Montant
                   </EnTeteTriable>
                   <EnTeteTriable cle="date_facture" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
-                    Date d'émission
+                    Date d&apos;émission
                   </EnTeteTriable>
+                  <TableCell align="center" sx={{ ...STYLE_EN_TETE, width: 100 }}>
+                    Action
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -291,7 +339,6 @@ export default function FacturesListPage() {
                         {facture.numero_facture}
                       </Typography>
                     </TableCell>
-                    {/* Type : texte coloré, sans cadre */}
                     <TableCell align="center">
                       <Typography
                         variant="body2"
@@ -311,11 +358,50 @@ export default function FacturesListPage() {
                     <TableCell align="center">
                       {new Date(facture.date_facture).toLocaleDateString("fr-FR")}
                     </TableCell>
+                    {/* Actions : export PDF / Excel par facture */}
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={0.25} justifyContent="center" alignItems="center">
+                        <Tooltip title="Exporter en PDF">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => exporterFacturePdf(facture)}
+                              disabled={Boolean(exportEnCoursId)}
+                              sx={{ color: "#d93025" }}
+                              aria-label={`Exporter ${facture.numero_facture} en PDF`}
+                            >
+                              {exportEnCoursId === `${facture.id}-pdf` ? (
+                                <CircularProgress size={16} color="inherit" />
+                              ) : (
+                                <PictureAsPdfIcon sx={{ fontSize: 18 }} />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title="Exporter en Excel">
+                          <span>
+                            <IconButton
+                              size="small"
+                              onClick={() => exporterFactureExcel(facture)}
+                              disabled={Boolean(exportEnCoursId)}
+                              sx={{ color: "#107c41" }}
+                              aria-label={`Exporter ${facture.numero_facture} en Excel`}
+                            >
+                              {exportEnCoursId === `${facture.id}-xlsx` ? (
+                                <CircularProgress size={16} color="inherit" />
+                              ) : (
+                                <TableChartIcon sx={{ fontSize: 18 }} />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {facturesPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       {recherche
                         ? "Aucune facture ne correspond à votre recherche."
                         : "Aucune facture émise pour le moment."}
@@ -325,7 +411,6 @@ export default function FacturesListPage() {
               </TableBody>
             </Table>
           </TableContainer>
-
           {facturesFiltrees.length > 0 && (
             <PaginationBar
               compte={facturesFiltrees.length}
