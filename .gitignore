@@ -1,0 +1,12 @@
+.env
+certs/
+venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+media/
+staticfiles/
+db.sqlite3
+*.log
+.vscode/

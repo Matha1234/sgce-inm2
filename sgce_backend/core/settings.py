@@ -91,6 +91,8 @@ TIME_ZONE = 'Indian/Antananarivo'
 USE_I18N = True
 USE_TZ = True
 
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 STATIC_URL = 'static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -103,6 +105,11 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
+# ── HTTPS derrière Nginx ─────────────────────────────────────────────────
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in config('CSRF_TRUSTED_ORIGINS', default='').split(',') if o.strip()
+]
 
 # ── Email (réinitialisation de mot de passe) ──────────────────────────────
 # SMTP Gmail par défaut : renseigner EMAIL_HOST_USER / EMAIL_HOST_PASSWORD

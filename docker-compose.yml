@@ -1,0 +1,44 @@
+services:
+  backend:
+    image: sgce-inm/backend:1.0
+    build: ./sgce_backend
+    container_name: sgce_backend
+    env_file:
+      - .env
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    # Le backend n'est pas publié sur le réseau : seul Nginx (80/443) l'est.
+    expose:
+      - "8000"
+    # Permet au conteneur de joindre l'Oracle installé sur la machine
+    # Windows hôte (hors Docker) via le nom spécial host.docker.internal.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  frontend:
+    image: sgce-inm/frontend:1.0
+    build:
+      context: ./sgce_frontend
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: sgce_frontend
+    depends_on:
+      - backend
+    volumes:
+      # Fichiers statiques et médias partagés avec le backend (lecture seule)
+      - static_data:/var/www/static:ro
+      - media_data:/var/www/media:ro
+      # Certificat HTTPS (dossier "certs" à côté de ce fichier)
+      - ./certs:/etc/nginx/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+volumes:
+  media_data:
+    name: sgce_media_data
+  static_data:
+    name: sgce_static_data
