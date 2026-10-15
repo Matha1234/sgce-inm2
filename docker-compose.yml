@@ -3,6 +3,7 @@ services:
     image: sgce-inm/backend:1.0
     build: ./sgce_backend
     container_name: sgce_backend
+    init: true
     env_file:
       - .env
     volumes:
@@ -24,6 +25,7 @@ services:
       args:
         VITE_API_BASE_URL: /api
     container_name: sgce_frontend
+    init: true
     depends_on:
       - backend
     volumes:
