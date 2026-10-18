@@ -2,15 +2,14 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from .models import Utilisateur
+from .services import (
+    envoyer_identifiants_nouveau_compte,
+    notifier_modifications_compte,
+)
 
 
 class UtilisateurSerializer(serializers.ModelSerializer):
-    """
-    Serializer utilise par /api/auth/me/, en lecture (GET) et en mise a jour
-    de son propre profil (PATCH : prenom, nom, email, photo uniquement).
-    Le role, le statut actif et l'identifiant ne sont jamais modifiables par
-    l'utilisateur lui-meme (RG14/RG20 : seul l'Administrateur gere les roles).
-    """
+    """Profil /api/auth/me/ (GET + PATCH)."""
 
     role_display = serializers.CharField(source="get_role_display", read_only=True)
 
@@ -22,23 +21,26 @@ class UtilisateurSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
+            "telephone",
             "role",
             "role_display",
             "is_active",
             "date_joined",
+            "last_login",
             "photo",
         ]
-        read_only_fields = ["id", "username", "date_joined", "role_display", "role", "is_active"]
+        read_only_fields = [
+            "id",
+            "username",
+            "date_joined",
+            "last_login",
+            "role_display",
+            "role",
+            "is_active",
+        ]
 
 
 class UtilisateurAnnuaireSerializer(serializers.ModelSerializer):
-    """
-    Serializer minimal expose a tous les utilisateurs authentifies (annuaire
-    interne), utilise pour choisir un destinataire lors de l'envoi d'un
-    message. Ne renvoie aucune information sensible (pas d'email, pas de
-    statut de compte).
-    """
-
     nom_complet = serializers.SerializerMethodField()
     role_display = serializers.CharField(source="get_role_display", read_only=True)
 
@@ -53,13 +55,9 @@ class UtilisateurAnnuaireSerializer(serializers.ModelSerializer):
 
 class UtilisateurAdminSerializer(serializers.ModelSerializer):
     """
-    Serializer de gestion des comptes utilisateurs, reserve a
-    l'Administrateur (creer, modifier, desactiver un compte - besoin
-    utilisateur "Gérer les comptes et les rôles des utilisateurs").
-
-    Le mot de passe est en ecriture seule : obligatoire a la creation,
-    optionnel a la mise a jour (laisse le mot de passe inchange si non
-    fourni, plutot que d'exiger sa ressaisie a chaque modification).
+    Gestion des comptes (Administrateur).
+    - Creation : email avec identifiants
+    - Mise a jour : email si role, statut, profil ou mot de passe change
     """
 
     password = serializers.CharField(
@@ -70,10 +68,21 @@ class UtilisateurAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Utilisateur
         fields = [
-            "id", "username", "email", "first_name", "last_name",
-            "role", "role_display", "is_active", "date_joined", "password", "photo",
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "telephone",
+            "role",
+            "role_display",
+            "is_active",
+            "date_joined",
+            "last_login",
+            "password",
+            "photo",
         ]
-        read_only_fields = ["id", "date_joined", "role_display", "photo"]
+        read_only_fields = ["id", "date_joined", "last_login", "role_display", "photo"]
 
     def validate_password(self, value):
         validate_password(value)
@@ -91,13 +100,40 @@ class UtilisateurAdminSerializer(serializers.ModelSerializer):
         utilisateur = Utilisateur(**validated_data)
         utilisateur.set_password(password)
         utilisateur.save()
+        envoyer_identifiants_nouveau_compte(utilisateur, password)
         return utilisateur
 
     def update(self, instance, validated_data):
         password = validated_data.pop("password", None)
+
+        # Snapshot avant modification
+        avant = {
+            "role": instance.role,
+            "is_active": instance.is_active,
+            "first_name": instance.first_name,
+            "last_name": instance.last_name,
+            "email": instance.email,
+            "telephone": getattr(instance, "telephone", "") or "",
+        }
+
         for champ, valeur in validated_data.items():
             setattr(instance, champ, valeur)
         if password:
             instance.set_password(password)
         instance.save()
+
+        # Detecter les changements pour l'email
+        changements = {}
+        for champ, ancienne in avant.items():
+            nouvelle = getattr(instance, champ, "")
+            if champ == "telephone":
+                nouvelle = nouvelle or ""
+            if ancienne != nouvelle:
+                changements[champ] = (ancienne, nouvelle)
+        if password:
+            changements["password"] = (None, "***")
+
+        if changements:
+            notifier_modifications_compte(instance, changements)
+
         return instance

@@ -8,6 +8,8 @@ class Utilisateur(AbstractUser):
     Ajoute un champ 'role' a choix fixes par rapport a AbstractUser.
     Correspond a la table 'utilisateurs' documentee dans
     docs/schema/01_schema_utilisateurs.sql
+
+    Champs herites utiles : first_name, last_name, email, last_login, date_joined.
     """
 
     class Role(models.TextChoices):
@@ -23,8 +25,16 @@ class Utilisateur(AbstractUser):
         help_text="Role unique de l'utilisateur (RG14 : un utilisateur = un seul role).",
     )
     photo = models.ImageField(
-        upload_to="photos_profil/", null=True, blank=True,
+        upload_to="photos_profil/",
+        null=True,
+        blank=True,
         help_text="Photo de profil de l'utilisateur.",
+    )
+    telephone = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        help_text="Numero de telephone de l'utilisateur.",
     )
 
     class Meta:

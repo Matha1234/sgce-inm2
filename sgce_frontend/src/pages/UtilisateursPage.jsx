@@ -40,6 +40,7 @@ const COMPTE_VIDE = {
   email: "",
   first_name: "",
   last_name: "",
+  telephone: "",
   password: "",
   password_confirm: "",
   role: "AGENT_SDO",
@@ -49,10 +50,36 @@ function normaliser(donnees) {
   return Array.isArray(donnees) ? donnees : donnees.results || [];
 }
 
+function formaterDateHeure(valeur) {
+  if (!valeur) return "—";
+  return new Date(valeur).toLocaleString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formaterDate(valeur) {
+  if (!valeur) return "—";
+  return new Date(valeur).toLocaleDateString("fr-FR");
+}
+
+/** URL absolue de la photo (chemin relatif /media/…). */
+function urlPhoto(photo) {
+  if (!photo) return undefined;
+  if (typeof photo === "string" && photo.startsWith("http")) return photo;
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+  const origin = apiBase.replace(/\/api\/?$/, "");
+  const chemin = String(photo).startsWith("/") ? photo : `/${photo}`;
+  return `${origin}${chemin}`;
+}
+
 function LigneInfo({ label, valeur }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, minWidth: 100 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, minWidth: 120 }}>
         {label}
       </Typography>
       <Typography variant="body2" sx={{ fontWeight: 600, textAlign: "right" }}>
@@ -111,7 +138,7 @@ export default function UtilisateursPage() {
     const q = recherche.trim().toLowerCase();
     if (!q) return utilisateurs;
     return utilisateurs.filter((u) =>
-      [u.username, u.email, u.first_name, u.last_name, LIBELLES_ROLES[u.role]]
+      [u.username, u.email, u.first_name, u.last_name, u.telephone, LIBELLES_ROLES[u.role]]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     );
@@ -152,6 +179,7 @@ export default function UtilisateursPage() {
       email: utilisateur.email || "",
       first_name: utilisateur.first_name || "",
       last_name: utilisateur.last_name || "",
+      telephone: utilisateur.telephone || "",
       password: "",
       password_confirm: "",
       role: utilisateur.role,
@@ -200,6 +228,7 @@ export default function UtilisateursPage() {
           email: formulaire.email,
           first_name: formulaire.first_name,
           last_name: formulaire.last_name,
+          telephone: formulaire.telephone,
           role: formulaire.role,
         };
         if (formulaire.password) donnees.password = formulaire.password;
@@ -310,6 +339,19 @@ export default function UtilisateursPage() {
 
   const estCompteConnecte = (u) => u?.id === utilisateurConnecte?.id;
 
+  const colonnesExport = (e) => [
+    e.colonnePerso("Nom", (u) => u.last_name || "—", "center"),
+    e.colonnePerso("Prénom", (u) => u.first_name || "—", "center"),
+    e.colonnePerso("Identifiant", (u) => `@${u.username}`, "center"),
+    e.colonne("Email", "email", "center"),
+    e.colonnePerso("Téléphone", (u) => u.telephone || "—", "center"),
+    e.colonnePerso("Rôle", (u) => LIBELLES_ROLES[u.role] || u.role, "center"),
+    e.colonnePerso("Photo", (u) => (u.photo ? "Oui" : "Non"), "center"),
+    e.colonnePerso("Statut", (u) => (u.is_active ? "Actif" : "Désactivé"), "center"),
+    e.colonnePerso("Membre depuis", (u) => formaterDate(u.date_joined), "center"),
+    e.colonnePerso("Dernière connexion", (u) => formaterDateHeure(u.last_login), "center"),
+  ];
+
   return (
     <Box>
       <PageHeader
@@ -336,7 +378,7 @@ export default function UtilisateursPage() {
         <SearchField
           valeur={recherche}
           onChange={(e) => gererRecherche(e.target.value)}
-          placeholder="Rechercher par identifiant, nom, email ou rôle…"
+          placeholder="Rechercher par identifiant, prénom, nom, téléphone, email ou rôle…"
           largeur={400}
           sx={{ mb: 0, flexGrow: 1, maxWidth: 400 }}
         />
@@ -348,14 +390,7 @@ export default function UtilisateursPage() {
               titre: "Liste des comptes utilisateurs",
               sousTitre: recherche ? `Filtré : ${recherche}` : "",
               meta: e.metaEdition(utilisateursEnrichis.length),
-              colonnes: [
-                e.colonnePerso("Utilisateur", (u) => `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username, "left"),
-                e.colonnePerso("Identifiant", (u) => `@${u.username}`),
-                e.colonne("Email", "email", "left"),
-                e.colonnePerso("Rôle", (u) => LIBELLES_ROLES[u.role] || u.role),
-                e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "Désactivé"),
-                e.colonnePerso("Membre depuis", (u) => u.date_joined ? new Date(u.date_joined).toLocaleDateString("fr-FR") : ""),
-              ],
+              colonnes: colonnesExport(e),
               lignes: utilisateursEnrichis,
             });
           }}
@@ -368,14 +403,7 @@ export default function UtilisateursPage() {
                 titre: "Liste des comptes utilisateurs",
                 sousTitre: recherche ? `Filtré : ${recherche}` : "",
                 meta: e.metaEdition(utilisateursEnrichis.length),
-                colonnes: [
-                  e.colonnePerso("Utilisateur", (u) => `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username, "left"),
-                  e.colonnePerso("Identifiant", (u) => `@${u.username}`),
-                  e.colonne("Email", "email", "left"),
-                  e.colonnePerso("Rôle", (u) => LIBELLES_ROLES[u.role] || u.role),
-                  e.colonnePerso("Statut", (u) => u.is_active ? "Actif" : "Désactivé"),
-                  e.colonnePerso("Membre depuis", (u) => u.date_joined ? new Date(u.date_joined).toLocaleDateString("fr-FR") : ""),
-                ],
+                colonnes: colonnesExport(e),
                 lignes: utilisateursEnrichis,
               }],
             });
@@ -404,129 +432,148 @@ export default function UtilisateursPage() {
             <Table stickyHeader size="small">
               <TableHead>
                 <TableRow>
-                  <EnTeteTriable cle="_nomComplet" align="left" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
-                    Utilisateur
+                  <EnTeteTriable cle="last_name" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Nom
                   </EnTeteTriable>
-                  <EnTeteTriable cle="role" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
-                    Rôle
+                  <EnTeteTriable cle="first_name" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Prénom
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="username" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Identifiant
                   </EnTeteTriable>
                   <EnTeteTriable cle="email" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
                     Email
                   </EnTeteTriable>
+                  <EnTeteTriable cle="telephone" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Téléphone
+                  </EnTeteTriable>
+                  <EnTeteTriable cle="role" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Rôle
+                  </EnTeteTriable>
+                  <TableCell align="center" sx={STYLE_EN_TETE}>Photo</TableCell>
                   <EnTeteTriable cle="is_active" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
                     Statut
                   </EnTeteTriable>
                   <EnTeteTriable cle="date_joined" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
                     Membre depuis
                   </EnTeteTriable>
+                  <EnTeteTriable cle="last_login" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
+                    Dernière connexion
+                  </EnTeteTriable>
                   <TableCell align="center" sx={STYLE_EN_TETE}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {utilisateursPaginees.map((u) => {
-                  const nomComplet = `${u.first_name || ""} ${u.last_name || ""}`.trim() || u.username;
-                  return (
-                    <TableRow key={u.id} hover>
-                      <TableCell align="left">
-                        <Stack direction="row" spacing={1.2} alignItems="center">
-                          <Avatar
-                            src={u.photo || undefined}
-                            sx={{
-                              width: 30, height: 30, fontSize: 12,
-                              bgcolor: COULEURS_ROLES[u.role] || "#455A64",
-                            }}
-                          >
-                            {(u.first_name || u.username || "?").charAt(0).toUpperCase()}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                              {nomComplet}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              @{u.username}
-                            </Typography>
-                          </Box>
-                        </Stack>
-                      </TableCell>
-
-                      <TableCell align="center">
-                        <Chip
-                          label={LIBELLES_ROLES[u.role] || u.role}
-                          size="small"
-                          onClick={(e) => ouvrirMenuRole(e, u)}
-                          onDelete={(e) => ouvrirMenuRole(e, u)}
-                          deleteIcon={<KeyboardArrowDownIcon />}
-                          variant="outlined"
-                          sx={{ fontWeight: 600, fontSize: 11.5, cursor: "pointer" }}
-                        />
-                      </TableCell>
-
-                      <TableCell align="center">{u.email || "—"}</TableCell>
-
-                      {/* Statut : texte coloré, sans cadre */}
-                      <TableCell align="center">
-                        <Typography
-                          variant="body2"
+                {utilisateursPaginees.map((u) => (
+                  <TableRow key={u.id} hover>
+                    <TableCell align="center">
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {u.last_name || "—"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {u.first_name || "—"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        @{u.username}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">{u.email || "—"}</TableCell>
+                    <TableCell align="center">{u.telephone || "—"}</TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={LIBELLES_ROLES[u.role] || u.role}
+                        size="small"
+                        onClick={(e) => ouvrirMenuRole(e, u)}
+                        onDelete={(e) => ouvrirMenuRole(e, u)}
+                        deleteIcon={<KeyboardArrowDownIcon />}
+                        variant="outlined"
+                        sx={{ fontWeight: 600, fontSize: 11.5, cursor: "pointer" }}
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          width: "100%",
+                        }}
+                      >
+                        <Avatar
+                          src={urlPhoto(u.photo)}
                           sx={{
-                            fontWeight: 700,
-                            color: u.is_active ? "success.main" : "error.main",
+                            width: 36,
+                            height: 36,
+                            fontSize: 13,
+                            bgcolor: COULEURS_ROLES[u.role] || "#455A64",
                           }}
                         >
-                          {u.is_active ? "Actif" : "Désactivé"}
-                        </Typography>
-                      </TableCell>
-
-                      <TableCell align="center">
-                        {u.date_joined
-                          ? new Date(u.date_joined).toLocaleDateString("fr-FR")
-                          : "—"}
-                      </TableCell>
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={0.3} justifyContent="center">
-                          <Tooltip title="Voir les informations">
-                            <IconButton size="small" color="info" onClick={() => ouvrirVoirInfo(u)}>
-                              <VisibilityOutlinedIcon fontSize="small" />
+                          {(u.first_name || u.username || "?").charAt(0).toUpperCase()}
+                        </Avatar>
+                      </Box>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 700,
+                          color: u.is_active ? "success.main" : "error.main",
+                        }}
+                      >
+                        {u.is_active ? "Actif" : "Désactivé"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">{formaterDate(u.date_joined)}</TableCell>
+                    <TableCell align="center">{formaterDateHeure(u.last_login)}</TableCell>
+                    <TableCell align="center">
+                      <Stack direction="row" spacing={0.3} justifyContent="center">
+                        <Tooltip title="Voir les informations">
+                          <IconButton size="small" color="info" onClick={() => ouvrirVoirInfo(u)}>
+                            <VisibilityOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Modifier le compte">
+                          <IconButton size="small" onClick={() => ouvrirModification(u)}>
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={u.is_active ? "Désactiver ce compte" : "Réactiver ce compte"}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color={u.is_active ? "success" : "error"}
+                              disabled={estCompteConnecte(u)}
+                              onClick={() => demanderBasculeActivation(u)}
+                            >
+                              {u.is_active
+                                ? <ToggleOnIcon fontSize="small" />
+                                : <ToggleOffIcon fontSize="small" />}
                             </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Modifier le compte">
-                            <IconButton size="small" onClick={() => ouvrirModification(u)}>
-                              <EditOutlinedIcon fontSize="small" />
+                          </span>
+                        </Tooltip>
+                        <Tooltip title={estCompteConnecte(u) ? "Vous ne pouvez pas supprimer votre propre compte" : "Supprimer ce compte"}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              disabled={estCompteConnecte(u)}
+                              onClick={() => demanderSuppression(u)}
+                            >
+                              <DeleteOutlineIcon fontSize="small" />
                             </IconButton>
-                          </Tooltip>
-                          <Tooltip title={u.is_active ? "Désactiver ce compte" : "Réactiver ce compte"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color={u.is_active ? "success" : "error"}
-                                disabled={estCompteConnecte(u)}
-                                onClick={() => demanderBasculeActivation(u)}
-                              >
-                                {u.is_active
-                                  ? <ToggleOnIcon fontSize="small" />
-                                  : <ToggleOffIcon fontSize="small" />}
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          <Tooltip title={estCompteConnecte(u) ? "Vous ne pouvez pas supprimer votre propre compte" : "Supprimer ce compte"}>
-                            <span>
-                              <IconButton
-                                size="small"
-                                color="error"
-                                disabled={estCompteConnecte(u)}
-                                onClick={() => demanderSuppression(u)}
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                          </span>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                ))}
                 {utilisateursPaginees.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={11} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       {recherche
                         ? "Aucun compte ne correspond à votre recherche."
                         : "Aucun compte utilisateur."}
@@ -587,6 +634,18 @@ export default function UtilisateursPage() {
               </Alert>
             )}
 
+            <TextField
+              label="Nom"
+              fullWidth
+              value={formulaire.last_name}
+              onChange={(e) => setFormulaire((f) => ({ ...f, last_name: e.target.value }))}
+            />
+            <TextField
+              label="Prénom"
+              fullWidth
+              value={formulaire.first_name}
+              onChange={(e) => setFormulaire((f) => ({ ...f, first_name: e.target.value }))}
+            />
             {!utilisateurEnEdition && (
               <TextField
                 label="Identifiant"
@@ -597,23 +656,18 @@ export default function UtilisateursPage() {
               />
             )}
             <TextField
-              label="Prénom"
-              fullWidth
-              value={formulaire.first_name}
-              onChange={(e) => setFormulaire((f) => ({ ...f, first_name: e.target.value }))}
-            />
-            <TextField
-              label="Nom"
-              fullWidth
-              value={formulaire.last_name}
-              onChange={(e) => setFormulaire((f) => ({ ...f, last_name: e.target.value }))}
-            />
-            <TextField
               label="Email"
               type="email"
               fullWidth
               value={formulaire.email}
               onChange={(e) => setFormulaire((f) => ({ ...f, email: e.target.value }))}
+            />
+            <TextField
+              label="Téléphone"
+              fullWidth
+              value={formulaire.telephone}
+              onChange={(e) => setFormulaire((f) => ({ ...f, telephone: e.target.value }))}
+              placeholder="ex. 034 12 345 67"
             />
             <TextField
               select
@@ -686,6 +740,7 @@ export default function UtilisateursPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Informations : photo centrée au-dessus du nom et de l'identifiant */}
       <Dialog
         open={Boolean(utilisateurAVoir)}
         onClose={() => setUtilisateurAVoir(null)}
@@ -709,28 +764,61 @@ export default function UtilisateursPage() {
         </DialogTitle>
         <DialogContent dividers>
           {utilisateurAVoir && (
-            <Stack spacing={2} alignItems="center" sx={{ py: 1 }}>
-              <Avatar
-                src={utilisateurAVoir.photo || undefined}
+            <Stack spacing={2} alignItems="center" sx={{ py: 1.5, width: "100%" }}>
+              <Box
                 sx={{
-                  width: 72, height: 72, fontSize: 28,
-                  bgcolor: COULEURS_ROLES[utilisateurAVoir.role] || "#455A64",
+                  width: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                {(utilisateurAVoir.first_name || utilisateurAVoir.username || "?").charAt(0).toUpperCase()}
-              </Avatar>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  {`${utilisateurAVoir.first_name || ""} ${utilisateurAVoir.last_name || ""}`.trim()
-                    || utilisateurAVoir.username}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  @{utilisateurAVoir.username}
-                </Typography>
+                <Avatar
+                  src={urlPhoto(utilisateurAVoir.photo)}
+                  sx={{
+                    width: 96,
+                    height: 96,
+                    fontSize: 36,
+                    bgcolor: COULEURS_ROLES[utilisateurAVoir.role] || "#455A64",
+                    boxShadow: "0 0 0 4px rgba(0,0,0,0.06)",
+                    mx: "auto",
+                  }}
+                >
+                  {(utilisateurAVoir.first_name || utilisateurAVoir.username || "?")
+                    .charAt(0)
+                    .toUpperCase()}
+                </Avatar>
+
+                <Box sx={{ textAlign: "center", mt: 1.5, width: "100%" }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.3 }}>
+                    {`${utilisateurAVoir.first_name || ""} ${utilisateurAVoir.last_name || ""}`.trim()
+                      || utilisateurAVoir.username}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                    @{utilisateurAVoir.username}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={LIBELLES_ROLES[utilisateurAVoir.role] || utilisateurAVoir.role}
+                    sx={{
+                      mt: 1,
+                      fontWeight: 600,
+                      bgcolor: COULEURS_ROLES[utilisateurAVoir.role] || "#455A64",
+                      color: "#fff",
+                    }}
+                  />
+                </Box>
               </Box>
+
               <Divider sx={{ width: "100%" }} />
+
               <Stack spacing={1.2} sx={{ width: "100%" }}>
+                <LigneInfo label="Nom" valeur={utilisateurAVoir.last_name || "—"} />
+                <LigneInfo label="Prénom" valeur={utilisateurAVoir.first_name || "—"} />
+                <LigneInfo label="Identifiant" valeur={`@${utilisateurAVoir.username}`} />
                 <LigneInfo label="Email" valeur={utilisateurAVoir.email || "—"} />
+                <LigneInfo label="Téléphone" valeur={utilisateurAVoir.telephone || "—"} />
                 <LigneInfo
                   label="Rôle"
                   valeur={LIBELLES_ROLES[utilisateurAVoir.role] || utilisateurAVoir.role}
@@ -739,16 +827,8 @@ export default function UtilisateursPage() {
                   label="Statut"
                   valeur={utilisateurAVoir.is_active ? "Actif" : "Désactivé"}
                 />
-                <LigneInfo
-                  label="Membre depuis"
-                  valeur={
-                    utilisateurAVoir.date_joined
-                      ? new Date(utilisateurAVoir.date_joined).toLocaleDateString("fr-FR", {
-                          day: "2-digit", month: "long", year: "numeric",
-                        })
-                      : "—"
-                  }
-                />
+                <LigneInfo label="Membre depuis" valeur={formaterDate(utilisateurAVoir.date_joined)} />
+                <LigneInfo label="Dernière connexion" valeur={formaterDateHeure(utilisateurAVoir.last_login)} />
               </Stack>
             </Stack>
           )}
@@ -780,14 +860,29 @@ export default function UtilisateursPage() {
         <DialogContent sx={{ textAlign: "center", py: 3 }}>
           {dialogueConfirmationActivation.utilisateur && (
             <>
-              <PastilleIcone
-                icone={dialogueConfirmationActivation.utilisateur.is_active
-                  ? <ToggleOnIcon sx={{ fontSize: 24 }} />
-                  : <ToggleOffIcon sx={{ fontSize: 24 }} />}
-                couleur={dialogueConfirmationActivation.utilisateur.is_active ? "success.main" : "error.main"}
-                taille={52}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 700, mt: 2, mb: 0.5 }}>
+              <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>
+                <Avatar
+                  src={urlPhoto(dialogueConfirmationActivation.utilisateur.photo)}
+                  sx={{
+                    width: 64,
+                    height: 64,
+                    fontSize: 24,
+                    bgcolor: COULEURS_ROLES[dialogueConfirmationActivation.utilisateur.role] || "#455A64",
+                  }}
+                >
+                  {(dialogueConfirmationActivation.utilisateur.first_name
+                    || dialogueConfirmationActivation.utilisateur.username
+                    || "?").charAt(0).toUpperCase()}
+                </Avatar>
+              </Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 1.5 }}>
+                {`${dialogueConfirmationActivation.utilisateur.first_name || ""} ${dialogueConfirmationActivation.utilisateur.last_name || ""}`.trim()
+                  || dialogueConfirmationActivation.utilisateur.username}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                @{dialogueConfirmationActivation.utilisateur.username}
+              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
                 {dialogueConfirmationActivation.utilisateur.is_active
                   ? "Désactiver ce compte ?"
                   : "Réactiver ce compte ?"}

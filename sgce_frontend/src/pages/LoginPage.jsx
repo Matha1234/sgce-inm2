@@ -14,10 +14,10 @@ import LockResetIcon from "@mui/icons-material/LockReset";
 import MailOutlinedIcon from "@mui/icons-material/MailOutlined";
 import MarkEmailReadIcon from "@mui/icons-material/MarkEmailRead";
 import { useDispatch, useSelector } from "react-redux";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { demanderReinitialisationMotDePasse, recupererProfil, seConnecter } from "../api/authApi";
-import { setTokens, setUtilisateur } from "../store/authSlice";
+import { setTokens, setUtilisateur, logout } from "../store/authSlice";
 import logoInm from "../assets/logo-inm.png";
 
 const CLE_EVENEMENT_AUTH = "sgcfc_evenement_auth";
@@ -37,9 +37,15 @@ export default function LoginPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const theme = useTheme();
   const sombre = theme.palette.mode === "dark";
   const { estAuthentifie } = useSelector((state) => state.auth);
+
+  // Depuis l'email nouveau compte (?nouveau=1) ou apres reset MDP (?deconnexion=1)
+  const forcerLogin =
+    searchParams.get("nouveau") === "1" ||
+    searchParams.get("deconnexion") === "1";
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -53,6 +59,12 @@ export default function LoginPage() {
   const [envoiReinitialisation, setEnvoiReinitialisation] = useState(false);
   const [reinitialisationEnvoyee, setReinitialisationEnvoyee] = useState(false);
   const [erreurReinitialisation, setErreurReinitialisation] = useState("");
+
+  useEffect(() => {
+    if (forcerLogin) {
+      dispatch(logout());
+    }
+  }, [forcerLogin, dispatch]);
 
   useEffect(() => {
     const brut = sessionStorage.getItem(CLE_EVENEMENT_AUTH);
@@ -69,7 +81,8 @@ export default function LoginPage() {
     }
   }, []);
 
-  if (estAuthentifie) {
+  // Ne redirige vers le tableau de bord que si session active ET pas forcerLogin
+  if (estAuthentifie && !forcerLogin) {
     const destination = location.state?.from?.pathname || "/";
     return <Navigate to={destination} replace />;
   }
@@ -124,7 +137,6 @@ export default function LoginPage() {
     setErreurReinitialisation("");
   };
 
-  // Couleurs dérivées du thème MUI (clair / sombre)
   const primary = theme.palette.primary.main;
   const primaryDark = theme.palette.primary.dark;
   const fondPage = sombre
@@ -228,7 +240,6 @@ export default function LoginPage() {
           backdropFilter: "blur(12px)",
         }}
       >
-        {/* Panneau marque */}
         <Box
           sx={{
             flex: "1 1 44%",
@@ -323,7 +334,6 @@ export default function LoginPage() {
           </Box>
         </Box>
 
-        {/* Formulaire */}
         <Paper
           elevation={0}
           square

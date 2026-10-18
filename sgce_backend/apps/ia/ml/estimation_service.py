@@ -1,19 +1,5 @@
-"""
-Service d'estimation intelligente des couts (Sprint 4-5).
-
-Deux modes de fonctionnement, geres automatiquement (RG20) :
-- Si l'historique de devis disponible est insuffisant, une estimation
-  heuristique simple et transparente est utilisee (version_modele =
-  "heuristique-v0").
-- Des que suffisamment de devis existent (reels et/ou fictifs generes via
-  la commande seed_historique), un modele XGBoost est entraine et utilise
-  (version_modele = "xgboost-v1").
-"""
-
 import os
 
-import joblib
-import pandas as pd
 from django.conf import settings
 
 from apps.commandes.models import Devis
@@ -37,6 +23,8 @@ PRIX_BASE_HEURISTIQUE = {
 
 def construire_dataset():
     """Construit un DataFrame a partir de tous les devis existants (reels et fictifs)."""
+    import pandas as pd
+
     qs = Devis.objects.select_related("commande").all()
     lignes = [
         {
@@ -53,6 +41,8 @@ def construire_dataset():
 
 def entrainer_modele():
     """Entraine les modeles XGBoost (prix et duree) sur l'historique disponible."""
+    import joblib
+    import pandas as pd
     from xgboost import XGBRegressor
 
     df = construire_dataset()
@@ -88,6 +78,8 @@ def entrainer_modele():
 
 
 def _charger_modele(path):
+    import joblib
+
     if not os.path.exists(path):
         return None
     return joblib.load(path)
@@ -98,6 +90,8 @@ def predire_cout(type_document, quantite, atelier):
     Predit le prix de revient et la duree de production. Si aucun modele
     entraine n'est disponible, applique le repli heuristique (RG20).
     """
+    import pandas as pd
+
     modele_prix_data = _charger_modele(MODEL_PATH_PRIX)
     modele_duree_data = _charger_modele(MODEL_PATH_DUREE)
 
@@ -125,6 +119,7 @@ def predire_cout(type_document, quantite, atelier):
         "prix_predit": round(prix_predit, 2),
         "duree_predite": int(duree_predite),
         "version_modele": "xgboost-v1",
+        "methode": "XGBOOST",
     }
 
 
@@ -140,4 +135,5 @@ def _estimation_heuristique(type_document, quantite, atelier):
         "prix_predit": prix_predit,
         "duree_predite": duree_predite,
         "version_modele": "heuristique-v0",
+        "methode": "HEURISTIQUE",
     }

@@ -5,6 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.mail import send_mail
+from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, status
@@ -14,19 +15,42 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .models import Utilisateur
 from .permissions import IsAdmin
 from .serializers import UtilisateurAdminSerializer, UtilisateurAnnuaireSerializer, UtilisateurSerializer
+from .services import notifier_suppression_compte
+
+
+class ConnexionJWTSerializer(TokenObtainPairSerializer):
+    """
+    Serializer JWT personnalise : apres authentification reussie,
+    met a jour last_login (non fait par defaut avec SimpleJWT).
+    """
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        self.user.last_login = timezone.now()
+        self.user.save(update_fields=["last_login"])
+        return data
+
+
+class ConnexionJWTView(TokenObtainPairView):
+    """
+    POST /api/auth/login/
+    Identique a TokenObtainPairView, mais met a jour last_login.
+    """
+
+    serializer_class = ConnexionJWTSerializer
 
 
 class MeView(RetrieveUpdateAPIView):
     """
-    GET   /api/auth/me/ - informations de l'utilisateur connecte (a partir du
-          token JWT envoye dans l'en-tete Authorization).
-    PATCH /api/auth/me/ - mise a jour de son propre profil : prenom, nom,
-          email et photo uniquement (le role et le statut actif restent
-          reserves a l'Administrateur, cf. UtilisateurSerializer).
+    GET   /api/auth/me/ - informations de l'utilisateur connecte (JWT).
+    PATCH /api/auth/me/ - mise a jour du profil : prenom, nom, email,
+          telephone et photo (role / is_active reserves a l'Admin).
     """
 
     serializer_class = UtilisateurSerializer
@@ -40,8 +64,7 @@ class MeView(RetrieveUpdateAPIView):
 class AnnuaireView(generics.ListAPIView):
     """
     GET /api/utilisateurs/annuaire/
-    Annuaire interne minimal (id, nom complet, rôle), accessible à tout
-    utilisateur connecté afin de choisir un destinataire pour un message.
+    Annuaire interne minimal (id, nom complet, role).
     """
 
     queryset = Utilisateur.objects.filter(is_active=True).order_by("first_name", "last_name")
@@ -52,8 +75,7 @@ class AnnuaireView(generics.ListAPIView):
 class ChangerMotDePasseView(APIView):
     """
     POST /api/auth/changer-mot-de-passe/
-    Corps attendu : { "ancien_mot_de_passe": "...", "nouveau_mot_de_passe": "..." }
-    Permet à l'utilisateur connecté de changer lui-même son mot de passe.
+    Corps : { "ancien_mot_de_passe": "...", "nouveau_mot_de_passe": "..." }
     """
 
     permission_classes = [IsAuthenticated]
@@ -71,23 +93,23 @@ class ChangerMotDePasseView(APIView):
         try:
             validate_password(nouveau, user=utilisateur)
         except DjangoValidationError as erreur:
-            return Response({"nouveau_mot_de_passe": erreur.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"nouveau_mot_de_passe": erreur.messages},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         utilisateur.set_password(nouveau)
         utilisateur.save(update_fields=["password"])
-        return Response({"detail": "Mot de passe modifié avec succès."}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "Mot de passe modifié avec succès."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class DemandeReinitialisationMotDePasseView(APIView):
     """
     POST /api/auth/mot-de-passe-oublie/
-    Corps attendu : { "email": "..." }
-
-    Accepte toute adresse email. Si un compte actif correspondant existe,
-    un email est envoyé ; sinon la même réponse générique est renvoyée pour
-    éviter de révéler l'existence d'un compte.
-    HTML contenant un bouton de réinitialisation est envoyé au titulaire
-    du compte.
+    Corps : { "email": "..." }
     """
 
     permission_classes = [AllowAny]
@@ -108,7 +130,12 @@ class DemandeReinitialisationMotDePasseView(APIView):
 
         if utilisateur is None:
             return Response(
-                {"detail": "Si un compte correspond à cette adresse, un email de réinitialisation sera envoyé."},
+                {
+                    "detail": (
+                        "Si un compte correspond à cette adresse, "
+                        "un email de réinitialisation sera envoyé."
+                    )
+                },
                 status=status.HTTP_200_OK,
             )
 
@@ -189,10 +216,7 @@ class DemandeReinitialisationMotDePasseView(APIView):
 class ReinitialiserMotDePasseView(APIView):
     """
     POST /api/auth/reinitialiser-mot-de-passe/
-    Corps attendu : { "uid": "...", "token": "...", "nouveau_mot_de_passe": "..." }
-
-    Valide le jeton signé reçu par email puis réinitialise le mot de passe
-    du compte concerné. Accessible sans authentification.
+    Corps : { "uid": "...", "token": "...", "nouveau_mot_de_passe": "..." }
     """
 
     permission_classes = [AllowAny]
@@ -235,8 +259,8 @@ class ReinitialiserMotDePasseView(APIView):
 
 class UtilisateurListCreateView(generics.ListCreateAPIView):
     """
-    GET  /api/utilisateurs/  - liste tous les comptes (Administrateur uniquement)
-    POST /api/utilisateurs/  - cree un nouveau compte (Administrateur uniquement)
+    GET  /api/utilisateurs/  - liste (Admin)
+    POST /api/utilisateurs/  - creation (Admin)
     """
 
     queryset = Utilisateur.objects.all().order_by("username")
@@ -246,10 +270,10 @@ class UtilisateurListCreateView(generics.ListCreateAPIView):
 
 class UtilisateurDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET/PATCH/PUT/DELETE /api/utilisateurs/<id>/ (Administrateur uniquement)
+    GET/PATCH/PUT/DELETE /api/utilisateurs/<id>/ (Admin)
 
-    Garde-fou : un Administrateur ne peut pas désactiver ni supprimer
-    son propre compte (évite de perdre accidentellement tout accès admin).
+    - Interdit de se desactiver / se supprimer soi-meme
+    - Envoie un email avant suppression du compte
     """
 
     queryset = Utilisateur.objects.all()
@@ -269,4 +293,8 @@ class UtilisateurDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         if instance.pk == self.request.user.pk:
             raise PermissionDenied("Vous ne pouvez pas supprimer votre propre compte.")
+
+        # Email AVANT suppression (l'adresse doit encore etre disponible)
+        notifier_suppression_compte(instance)
+
         instance.delete()
