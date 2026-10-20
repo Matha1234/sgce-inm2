@@ -650,6 +650,33 @@ class EtapeProduction(models.Model):
     def __str__(self):
         return f"{self.libelle} - {self.dossier.numero_dossier}"
 
+    def save(self, *args, **kwargs):
+        """
+        Renseigne automatiquement date_debut / date_fin selon le statut (RG7) :
+        - EN_COURS  → date_debut = maintenant (si encore vide)
+        - TERMINEE  → date_debut si vide, puis date_fin = maintenant (si vide)
+        - A_FAIRE   → réinitialise les deux dates
+        """
+        from django.utils import timezone
+
+        maintenant = timezone.now()
+
+        if self.statut == self.Statut.EN_COURS:
+            if not self.date_debut:
+                self.date_debut = maintenant
+            # Une étape remise « en cours » n'est plus terminée
+            self.date_fin = None
+        elif self.statut == self.Statut.TERMINEE:
+            if not self.date_debut:
+                self.date_debut = maintenant
+            if not self.date_fin:
+                self.date_fin = maintenant
+        elif self.statut == self.Statut.A_FAIRE:
+            self.date_debut = None
+            self.date_fin = None
+
+        super().save(*args, **kwargs)
+
 
 class ExecutionOperation(models.Model):
     """
