@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, IconButton, MenuItem, Paper,
+  Alert, Autocomplete, Box, Button, CircularProgress, Dialog, DialogActions,
+  DialogContent, DialogTitle, Divider, IconButton, MenuItem, Paper,
   Stack, Table, TableBody, TableCell, TableContainer, TableHead,
   TableRow, TextField, Tooltip, Typography,
 } from "@mui/material";
@@ -10,6 +10,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import TableChartIcon from "@mui/icons-material/TableChart";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { useSelector } from "react-redux";
 import {
   creerFacture, listerDossiers, listerFactures, recupererCommande,
@@ -34,8 +35,8 @@ function normaliser(donnees) {
   return Array.isArray(donnees) ? donnees : donnees.results || [];
 }
 
-/** Colonnes communes pour l'export (liste ou facture unique). */
-function colonnesExport(e) {
+/** Colonnes pour l'export de la LISTE (plusieurs factures). */
+function colonnesExportListe(e) {
   return [
     e.colonne("N° Facture", "numero_facture"),
     e.colonnePerso("Type", (f) => LIBELLES_TYPE[f.type_facture] || f.type_facture),
@@ -44,6 +45,46 @@ function colonnesExport(e) {
     e.colonnePerso("Montant", (f) => `${Number(f.montant).toLocaleString("fr-FR")} Ar`, "right"),
     e.colonnePerso("Date d'émission", (f) => new Date(f.date_facture).toLocaleDateString("fr-FR")),
   ];
+}
+
+/**
+ * Lignes verticales pour l'export d'UNE facture :
+ * colonne gauche = libellé, colonne droite = valeur.
+ */
+function lignesDetailFacture(facture) {
+  return [
+    { libelle: "N° Facture", valeur: facture.numero_facture || "—" },
+    {
+      libelle: "Type",
+      valeur: LIBELLES_TYPE[facture.type_facture] || facture.type_facture || "—",
+    },
+    { libelle: "Dossier", valeur: facture.dossier_numero || "—" },
+    { libelle: "Commande", valeur: facture.commande_numero || "—" },
+    {
+      libelle: "Montant",
+      valeur: `${Number(facture.montant).toLocaleString("fr-FR")} Ar`,
+    },
+    {
+      libelle: "Date d'émission",
+      valeur: facture.date_facture
+        ? new Date(facture.date_facture).toLocaleDateString("fr-FR")
+        : "—",
+    },
+  ];
+}
+
+function colonnesExportDetail(e) {
+  return [
+    e.colonnePerso("Champ", (r) => r.libelle, "left"),
+    e.colonnePerso("Valeur", (r) => r.valeur, "left"),
+  ];
+}
+
+function libelleDossier(d) {
+  if (!d) return "";
+  const statut = d.statut_production || "";
+  const cmd = d.commande_numero || "";
+  return [d.numero_dossier, cmd, statut].filter(Boolean).join(" — ");
 }
 
 export default function FacturesListPage() {
@@ -68,6 +109,7 @@ export default function FacturesListPage() {
   const [erreurEnvoi, setErreurEnvoi] = useState("");
   const [confirmationEmission, setConfirmationEmission] = useState(false);
   const [exportEnCoursId, setExportEnCoursId] = useState(null);
+  const [factureDetail, setFactureDetail] = useState(null);
 
   const charger = () => {
     setChargement(true);
@@ -105,7 +147,10 @@ export default function FacturesListPage() {
     setPage(0);
   };
 
-  const dossierSelectionne = dossiers.find((d) => d.id === dossierId) || null;
+  const dossierSelectionne = useMemo(
+    () => dossiers.find((d) => d.id === dossierId) || null,
+    [dossiers, dossierId]
+  );
 
   const ouvrirDialogue = async () => {
     setDialogueOuvert(true);
@@ -121,7 +166,7 @@ export default function FacturesListPage() {
   };
 
   const gererChoixDossier = async (id) => {
-    setDossierId(id);
+    setDossierId(id || "");
     setMontant("");
     if (!id) return;
     setChargementDevis(true);
@@ -179,7 +224,7 @@ export default function FacturesListPage() {
     }
   };
 
-  /** Export PDF d'une seule facture */
+  /** Export PDF d'une seule facture — tableau vertical (sans horodatage en bas) */
   const exporterFacturePdf = async (facture) => {
     setExportEnCoursId(`${facture.id}-pdf`);
     try {
@@ -188,10 +233,10 @@ export default function FacturesListPage() {
       await e.exporterPDF({
         fichier: `Facture_${numero}_${Date.now()}.pdf`,
         titre: `Facture ${numero}`,
-        sousTitre: `${LIBELLES_TYPE[facture.type_facture] || facture.type_facture} — ${new Date(facture.date_facture).toLocaleDateString("fr-FR")}`,
-        meta: e.metaEdition(1),
-        colonnes: colonnesExport(e),
-        lignes: [facture],
+        sousTitre: `${LIBELLES_TYPE[facture.type_facture] || facture.type_facture}`,
+        meta: e.metaEdition(1, `Facture ${numero}`),
+        colonnes: colonnesExportDetail(e),
+        lignes: lignesDetailFacture(facture),
       });
       afficherSucces(`Facture ${numero} exportée en PDF.`);
     } catch {
@@ -201,7 +246,7 @@ export default function FacturesListPage() {
     }
   };
 
-  /** Export Excel d'une seule facture */
+  /** Export Excel d'une seule facture — tableau vertical */
   const exporterFactureExcel = async (facture) => {
     setExportEnCoursId(`${facture.id}-xlsx`);
     try {
@@ -213,9 +258,9 @@ export default function FacturesListPage() {
           nom: "Facture",
           titre: `Facture ${numero}`,
           sousTitre: `${LIBELLES_TYPE[facture.type_facture] || facture.type_facture}`,
-          meta: e.metaEdition(1),
-          colonnes: colonnesExport(e),
-          lignes: [facture],
+          meta: e.metaEdition(1, `Facture ${numero}`),
+          colonnes: colonnesExportDetail(e),
+          lignes: lignesDetailFacture(facture),
         }],
       });
       afficherSucces(`Facture ${numero} exportée en Excel.`);
@@ -260,7 +305,7 @@ export default function FacturesListPage() {
               titre: "Liste des factures",
               sousTitre: recherche ? `Filtré : ${recherche}` : "",
               meta: e.metaEdition(facturesFiltrees.length),
-              colonnes: colonnesExport(e),
+              colonnes: colonnesExportListe(e),
               lignes: facturesFiltrees,
             });
           }}
@@ -273,7 +318,7 @@ export default function FacturesListPage() {
                 titre: "Liste des factures",
                 sousTitre: recherche ? `Filtré : ${recherche}` : "",
                 meta: e.metaEdition(facturesFiltrees.length),
-                colonnes: colonnesExport(e),
+                colonnes: colonnesExportListe(e),
                 lignes: facturesFiltrees,
               }],
             });
@@ -322,7 +367,7 @@ export default function FacturesListPage() {
                   <EnTeteTriable cle="date_facture" align="center" cleTri={cleTri} directionTri={directionTri} onTri={gererTri}>
                     Date d&apos;émission
                   </EnTeteTriable>
-                  <TableCell align="center" sx={{ ...STYLE_EN_TETE, width: 100 }}>
+                  <TableCell align="center" sx={{ ...STYLE_EN_TETE, width: 130 }}>
                     Action
                   </TableCell>
                 </TableRow>
@@ -358,9 +403,18 @@ export default function FacturesListPage() {
                     <TableCell align="center">
                       {new Date(facture.date_facture).toLocaleDateString("fr-FR")}
                     </TableCell>
-                    {/* Actions : export PDF / Excel par facture */}
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.25} justifyContent="center" alignItems="center">
+                        <Tooltip title="Voir le détail">
+                          <IconButton
+                            size="small"
+                            onClick={() => setFactureDetail(facture)}
+                            sx={{ color: "primary.main" }}
+                            aria-label={`Voir le détail de ${facture.numero_facture}`}
+                          >
+                            <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Exporter en PDF">
                           <span>
                             <IconButton
@@ -423,6 +477,82 @@ export default function FacturesListPage() {
         </Paper>
       )}
 
+      {/* Dialogue : détail d'une facture */}
+      <Dialog
+        open={Boolean(factureDetail)}
+        onClose={() => setFactureDetail(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          Détail de la facture
+          <IconButton onClick={() => setFactureDetail(null)} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          {factureDetail && (
+            <Stack spacing={1.5}>
+              {[
+                ["N° Facture", factureDetail.numero_facture],
+                ["Type", LIBELLES_TYPE[factureDetail.type_facture] || factureDetail.type_facture],
+                ["Dossier", factureDetail.dossier_numero],
+                ["Commande", factureDetail.commande_numero],
+                ["Montant", `${Number(factureDetail.montant).toLocaleString("fr-FR")} Ar`],
+                [
+                  "Date d'émission",
+                  factureDetail.date_facture
+                    ? new Date(factureDetail.date_facture).toLocaleDateString("fr-FR")
+                    : "—",
+                ],
+              ].map(([libelle, valeur]) => (
+                <Box
+                  key={libelle}
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    py: 0.5,
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    {libelle}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 700, textAlign: "right" }}>
+                    {valeur || "—"}
+                  </Typography>
+                </Box>
+              ))}
+              <Divider sx={{ my: 0.5 }} />
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  size="small"
+                  startIcon={<PictureAsPdfIcon />}
+                  onClick={() => exporterFacturePdf(factureDetail)}
+                  sx={{ color: "#d93025" }}
+                >
+                  PDF
+                </Button>
+                <Button
+                  size="small"
+                  startIcon={<TableChartIcon />}
+                  onClick={() => exporterFactureExcel(factureDetail)}
+                  sx={{ color: "#107c41" }}
+                >
+                  Excel
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFactureDetail(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialogue : émission — dossier avec recherche */}
       <Dialog open={dialogueOuvert} onClose={() => setDialogueOuvert(false)} fullWidth maxWidth="xs">
         <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           Émettre une facture
@@ -435,21 +565,39 @@ export default function FacturesListPage() {
             {erreurEnvoi && (
               <Alert severity="error" onClose={() => setErreurEnvoi("")}>{erreurEnvoi}</Alert>
             )}
-            <TextField
-              select
-              label="Dossier de fabrication"
-              value={dossierId}
-              onChange={(e) => gererChoixDossier(e.target.value)}
+
+            <Autocomplete
+              options={dossiers}
+              value={dossierSelectionne}
+              onChange={(_, nouveau) => gererChoixDossier(nouveau?.id ?? "")}
+              getOptionLabel={(option) => libelleDossier(option)}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              filterOptions={(options, state) => {
+                const q = state.inputValue.trim().toLowerCase();
+                if (!q) return options;
+                return options.filter((d) =>
+                  [
+                    d.numero_dossier,
+                    d.commande_numero,
+                    d.statut_production,
+                  ]
+                    .filter(Boolean)
+                    .some((c) => String(c).toLowerCase().includes(q))
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Dossier de fabrication"
+                  required
+                  placeholder="Rechercher un dossier…"
+                  helperText="Tapez pour filtrer par n° dossier, commande ou statut"
+                />
+              )}
+              noOptionsText="Aucun dossier trouvé"
               fullWidth
-              required
-            >
-              <MenuItem value="">— Choisir un dossier —</MenuItem>
-              {dossiers.map((d) => (
-                <MenuItem key={d.id} value={d.id}>
-                  {d.numero_dossier} — {d.commande_numero || d.statut_production}
-                </MenuItem>
-              ))}
-            </TextField>
+            />
+
             <TextField
               select
               label="Type de facture"

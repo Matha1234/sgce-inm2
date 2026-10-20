@@ -30,8 +30,11 @@ class EstimationIAResumeSerializer(serializers.Serializer):
     prix_predit = serializers.DecimalField(max_digits=12, decimal_places=2)
     duree_predite = serializers.IntegerField()
     version_modele = serializers.CharField()
-    methode = serializers.CharField()
-    score_confiance = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    methode = serializers.CharField(allow_null=True, required=False)
+    score_confiance = serializers.DecimalField(
+        max_digits=5, decimal_places=2, allow_null=True, required=False
+    )
+    date_estimation = serializers.DateTimeField(allow_null=True, required=False)
 
 
 class OptionDevisSerializer(serializers.ModelSerializer):
@@ -257,8 +260,11 @@ class DevisSerializer(serializers.ModelSerializer):
         extra_kwargs = {"prix_revient": {"required": False}}
 
     def get_estimation_ia(self, obj):
-        estimation = getattr(obj, "estimation_ia", None)
-        if estimation is None:
+        from apps.ia.models import EstimationIA
+
+        try:
+            estimation = obj.estimation_ia
+        except EstimationIA.DoesNotExist:
             return None
         return EstimationIAResumeSerializer(estimation).data
 

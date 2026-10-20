@@ -35,6 +35,7 @@ def construire_dataset():
             "duree_production": devis.duree_production,
         }
         for devis in qs
+        if devis.prix_revient is not None and devis.duree_production is not None
     ]
     return pd.DataFrame(lignes)
 
@@ -89,6 +90,11 @@ def predire_cout(type_document, quantite, atelier):
     """
     Predit le prix de revient et la duree de production. Si aucun modele
     entraine n'est disponible, applique le repli heuristique (RG20).
+
+    Retourne toujours :
+    - prix_predit, duree_predite, version_modele
+    - methode (XGBOOST | HEURISTIQUE)
+    - score_confiance (0-100)
     """
     import pandas as pd
 
@@ -109,17 +115,21 @@ def predire_cout(type_document, quantite, atelier):
     duree_predite = max(1, round(float(modele_duree_data["modele"].predict(ligne_encoded)[0])))
 
     # Securite : un prix de revient ne peut jamais etre negatif ou nul.
-    # Sur un historique encore limite, XGBoost peut extrapoler de facon
-    # aberrante pour des combinaisons peu representees dans les donnees
-    # d'entrainement ; on retombe dans ce cas sur l'estimation heuristique.
     if prix_predit <= 0:
         return _estimation_heuristique(type_document, quantite, atelier)
+
+    try:
+        n_hist = Devis.objects.count()
+    except Exception:
+        n_hist = SEUIL_HISTORIQUE_MINIMAL
+    score = min(95.0, 75.0 + max(0, n_hist - SEUIL_HISTORIQUE_MINIMAL) * 0.5)
 
     return {
         "prix_predit": round(prix_predit, 2),
         "duree_predite": int(duree_predite),
         "version_modele": "xgboost-v1",
         "methode": "XGBOOST",
+        "score_confiance": round(score, 2),
     }
 
 
@@ -131,9 +141,13 @@ def _estimation_heuristique(type_document, quantite, atelier):
     prix_predit = round(prix_base * multiplicateur * (quantite / 100), 2)
     duree_predite = max(1, int(round(2 + (quantite / 800) * multiplicateur)))
 
+    type_connu = type_document in PRIX_BASE_HEURISTIQUE
+    score = 60.0 if type_connu else 45.0
+
     return {
         "prix_predit": prix_predit,
         "duree_predite": duree_predite,
         "version_modele": "heuristique-v0",
         "methode": "HEURISTIQUE",
+        "score_confiance": score,
     }

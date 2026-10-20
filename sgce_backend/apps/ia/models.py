@@ -19,7 +19,8 @@ class EstimationIA(models.Model):
     devis = models.OneToOneField(Devis, on_delete=models.CASCADE, related_name="estimation_ia")
     prix_predit = models.DecimalField(max_digits=12, decimal_places=2)
     duree_predite = models.PositiveIntegerField(help_text="Durée de production prédite, en jours.")
-    date_estimation = models.DateTimeField(auto_now_add=True)
+    # auto_now=True : mise a jour a chaque nouvelle estimation
+    date_estimation = models.DateTimeField(auto_now=True)
     version_modele = models.CharField(
         max_length=50,
         default="heuristique-v0",
@@ -31,7 +32,7 @@ class EstimationIA(models.Model):
     )
     score_confiance = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True,
-        help_text="Score de confiance de l'estimation (0-100 %), pertinent pour XGBoost.",
+        help_text="Score de confiance de l'estimation (0-100 %).",
     )
 
     class Meta:

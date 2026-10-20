@@ -133,6 +133,8 @@ class DevisCreateView(generics.CreateAPIView):
         # autorité — appeler predire_cout produirait une valeur divergente et
         # non liée à la nomenclature réelle (cf. clarification STI / UC-02).
         if not produit_catalogue:
+            from django.utils import timezone
+
             from apps.ia.ml.estimation_service import predire_cout
             from apps.ia.models import EstimationIA
 
@@ -147,6 +149,9 @@ class DevisCreateView(generics.CreateAPIView):
                     "prix_predit": resultat["prix_predit"],
                     "duree_predite": resultat["duree_predite"],
                     "version_modele": resultat["version_modele"],
+                    "methode": resultat.get("methode", "HEURISTIQUE"),
+                    "score_confiance": resultat.get("score_confiance"),
+                    "date_estimation": timezone.now(),
                 },
             )
 
