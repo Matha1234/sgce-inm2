@@ -34,6 +34,8 @@ import CategoryIcon from "@mui/icons-material/Category";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
+import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import PsychologyIcon from "@mui/icons-material/Psychology";
 import { alpha } from "@mui/material/styles";
 import { useDispatch, useSelector } from "react-redux";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
@@ -82,6 +84,8 @@ const HAUTEUR_NAV = { xs: 44, sm: 46 };
 const ELEMENTS_MENU = [
   { label: "Tableau de bord", to: "/", icon: <DashboardIcon />, roles: null },
   { label: "Commandes", to: "/commandes", icon: <AssignmentIcon />, roles: ["ADMIN", "AGENT_SDO"] },
+  { label: "Devis", to: "/devis", icon: <RequestQuoteIcon />, roles: ["ADMIN", "AGENT_SDO"] },
+  { label: "Estimation IA", to: "/estimations", icon: <PsychologyIcon />, roles: ["ADMIN", "AGENT_SDO"] },
   { label: "Production", to: "/dossiers", icon: <PrecisionManufacturingIcon />, roles: ["ADMIN", "CHEF_ATELIER", "AGENT_SDO"] },
   { label: "Stock", to: "/stock", icon: <Inventory2Icon />, roles: ["ADMIN", "MAGASINIER"] },
   { label: "Facturation", to: "/factures", icon: <ReceiptLongIcon />, roles: ["ADMIN", "AGENT_SDO"] },

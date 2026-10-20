@@ -87,21 +87,45 @@ class CommandeDetailView(generics.RetrieveUpdateAPIView):
         return [IsAuthenticated()]
 
 
-class DevisCreateView(generics.CreateAPIView):
+class DevisListCreateView(generics.ListCreateAPIView):
     """
-    Creation du devis d'une commande - reservee a l'Agent SDO (RG16).
-    Calcule automatiquement une estimation intelligente des couts (RG4).
+    GET  /api/devis/  — liste de tous les devis (Agent SDO / Admin).
+    POST /api/devis/  — creation d'un devis (RG16).
+
+    Calcule automatiquement une estimation intelligente des couts (RG4)
+    pour les devis hors catalogue.
 
     Si le devis est marque comme pluriannuel (`pluriannuel=true`), et que
     le taux d'inflation projete n'a pas ete fourni explicitement, il est
     calcule automatiquement a partir de l'historique interne de l'INM, et
     le prix de vente est ajuste vers un prix unitaire equilibre sur toute
     la duree du contrat (RG22).
+
+    Filtres optionnels :
+      ?commande=<id>   — devis d'une commande donnee
+      ?valide=true|false — filtrer selon la validation
     """
 
-    queryset = Devis.objects.all()
+    queryset = Devis.objects.select_related(
+        "commande",
+        "commande__organisme",
+        "produit_catalogue",
+        "valide_par",
+    ).order_by("-date_devis")
     serializer_class = DevisSerializer
     permission_classes = [IsAgentSDO]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        commande_id = self.request.query_params.get("commande")
+        if commande_id:
+            queryset = queryset.filter(commande_id=commande_id)
+        valide = self.request.query_params.get("valide")
+        if valide is not None and valide != "":
+            queryset = queryset.filter(
+                valide=str(valide).lower() in ("1", "true", "oui", "yes")
+            )
+        return queryset
 
     def perform_create(self, serializer):
         produit_catalogue = serializer.validated_data.get("produit_catalogue")
@@ -180,7 +204,12 @@ class DevisDetailView(generics.RetrieveUpdateAPIView):
     cette contrainte n'était pas encore appliquée côté vue.
     """
 
-    queryset = Devis.objects.select_related("commande").all()
+    queryset = Devis.objects.select_related(
+        "commande",
+        "commande__organisme",
+        "produit_catalogue",
+        "valide_par",
+    ).all()
     serializer_class = DevisSerializer
     permission_classes = [IsAgentSDO]
 
@@ -576,4 +605,3 @@ class ExecutionOperationDetailView(generics.RetrieveUpdateAPIView):
                 "Seul un Chef d'atelier ou l'Administrateur peut modifier cette saisie (RG17)."
             )
         serializer.save()
-

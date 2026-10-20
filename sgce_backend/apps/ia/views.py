@@ -1,10 +1,12 @@
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.utilisateurs.permissions import IsAdmin, IsAgentSDO
 
 from .ml.estimation_service import entrainer_modele, predire_cout
-from .serializers import EstimationInputSerializer
+from .models import EstimationIA
+from .serializers import EstimationIASerializer, EstimationInputSerializer
 
 
 class EstimerCoutView(APIView):
@@ -36,3 +38,51 @@ class EntrainerModeleView(APIView):
     def post(self, request):
         resultat = entrainer_modele()
         return Response(resultat)
+
+
+class EstimationIAListView(generics.ListAPIView):
+    """
+    GET /api/estimations/
+    Liste de toutes les estimations IA enregistrees (Agent SDO / Admin).
+
+    Filtres optionnels :
+      ?devis=<id>       — estimation d'un devis donne
+      ?methode=XGBOOST|HEURISTIQUE
+      ?commande=<id>    — via le devis lie
+    """
+
+    queryset = EstimationIA.objects.select_related(
+        "devis",
+        "devis__commande",
+        "devis__commande__organisme",
+    ).order_by("-date_estimation")
+    serializer_class = EstimationIASerializer
+    permission_classes = [IsAgentSDO]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        devis_id = self.request.query_params.get("devis")
+        if devis_id:
+            queryset = queryset.filter(devis_id=devis_id)
+        commande_id = self.request.query_params.get("commande")
+        if commande_id:
+            queryset = queryset.filter(devis__commande_id=commande_id)
+        methode = self.request.query_params.get("methode")
+        if methode:
+            queryset = queryset.filter(methode=methode.upper())
+        return queryset
+
+
+class EstimationIADetailView(generics.RetrieveAPIView):
+    """
+    GET /api/estimations/<id>/
+    Detail d'une estimation IA (lecture seule).
+    """
+
+    queryset = EstimationIA.objects.select_related(
+        "devis",
+        "devis__commande",
+        "devis__commande__organisme",
+    ).all()
+    serializer_class = EstimationIASerializer
+    permission_classes = [IsAgentSDO]

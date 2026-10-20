@@ -10,6 +10,10 @@ import DashboardHomePage from "./pages/DashboardHomePage";
 import CommandesListPage from "./pages/CommandesListPage";
 import CommandeCreatePage from "./pages/CommandeCreatePage";
 import CommandeDetailPage from "./pages/CommandeDetailPage";
+import DevisListPage from "./pages/DevisListPage";
+import DevisDetailPage from "./pages/DevisDetailPage";
+import EstimationsListPage from "./pages/EstimationsListPage";
+import EstimationDetailPage from "./pages/EstimationDetailPage";
 import DossiersListPage from "./pages/DossiersListPage";
 import DossierDetailPage from "./pages/DossierDetailPage";
 import StockPage from "./pages/StockPage";
@@ -33,10 +37,18 @@ export default function App() {
           <Route path="/messagerie" element={<MessageriePage />} />
           <Route path="/parametres" element={<ParametresPage />} />
 
+          {/* Agent SDO (+ Admin) : commandes, devis, estimations, factures */}
           <Route element={<ProtectedRoute rolesAutorises={["AGENT_SDO"]} />}>
             <Route path="/commandes" element={<CommandesListPage />} />
             <Route path="/commandes/nouvelle" element={<CommandeCreatePage />} />
             <Route path="/commandes/:id" element={<CommandeDetailPage />} />
+
+            <Route path="/devis" element={<DevisListPage />} />
+            <Route path="/devis/:id" element={<DevisDetailPage />} />
+
+            <Route path="/estimations" element={<EstimationsListPage />} />
+            <Route path="/estimations/:id" element={<EstimationDetailPage />} />
+
             <Route path="/factures" element={<FacturesListPage />} />
           </Route>
 
@@ -49,8 +61,7 @@ export default function App() {
             <Route path="/stock" element={<StockPage />} />
           </Route>
 
-          {/* Agent SDO : consulte le contrôle du prix de revient (UC-06 / tableau acteurs).
-              Admin : accès complet (passe toujours via ProtectedRoute). */}
+          {/* Agent SDO : contrôle du prix de revient (UC-06). Admin : accès via ProtectedRoute. */}
           <Route element={<ProtectedRoute rolesAutorises={["AGENT_SDO"]} />}>
             <Route path="/rentabilite" element={<ControlesListPage />} />
           </Route>

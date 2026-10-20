@@ -13,6 +13,9 @@ export const modifierCommande = (id, donnees) =>
   axiosClient.patch(`/commandes/${id}/`, donnees).then((r) => r.data);
 
 // --- Devis ---
+// GET /api/devis/ — liste (filtres : ?commande=<id>, ?valide=true|false)
+export const listerDevis = (params) =>
+  axiosClient.get("/devis/", { params }).then((r) => r.data);
 export const creerDevis = (donnees) => axiosClient.post("/devis/", donnees).then((r) => r.data);
 export const recupererDevis = (id) => axiosClient.get(`/devis/${id}/`).then((r) => r.data);
 export const modifierDevis = (id, donnees) => axiosClient.patch(`/devis/${id}/`, donnees).then((r) => r.data);

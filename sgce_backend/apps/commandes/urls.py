@@ -6,8 +6,8 @@ from .views import (
     AtelierListView,
     CommandeDetailView,
     CommandeListCreateView,
-    DevisCreateView,
     DevisDetailView,
+    DevisListCreateView,
     DossierFabricationDetailView,
     DossierFabricationListCreateView,
     EtapeProductionDetailView,
@@ -30,7 +30,7 @@ urlpatterns = [
     path("commandes/", CommandeListCreateView.as_view(), name="commandes-list"),
     path("commandes/<int:pk>/", CommandeDetailView.as_view(), name="commandes-detail"),
 
-    path("devis/", DevisCreateView.as_view(), name="devis-create"),
+    path("devis/", DevisListCreateView.as_view(), name="devis-list-create"),
     path("devis/<int:pk>/", DevisDetailView.as_view(), name="devis-detail"),
 
     path("ateliers/", AtelierListView.as_view(), name="ateliers-list"),

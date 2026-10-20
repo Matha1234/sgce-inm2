@@ -352,7 +352,7 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
 
           <Box sx={{ mt: 0.5 }}>
             {!devis && !peutGererDevis && (
-              <Typography color="text.secondary">Aucun devis n'a encore été établi.</Typography>
+              <Typography color="text.secondary">Aucun devis n&apos;a encore été établi.</Typography>
             )}
 
             {!devis && peutGererDevis && (
@@ -478,8 +478,8 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                       ))}
                     </TextField>
                     <Alert severity="info" sx={{ mt: 1 }}>
-                      Le taux d'inflation projeté et le prix de vente équilibré seront
-                      calculés automatiquement à partir de l'historique de l'INM (RG22).
+                      Le taux d&apos;inflation projeté et le prix de vente équilibré seront
+                      calculés automatiquement à partir de l&apos;historique de l&apos;INM (RG22).
                     </Alert>
                   </>
                 )}
@@ -563,9 +563,7 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                           </Typography>
                         )}
 
-                        {/* RG39 : détail matière/opération copié depuis le catalogue à la
-                            création du devis — calculé côté serveur mais jusqu'ici jamais
-                            restitué à l'écran. */}
+                        {/* RG39 : détail matière/opération */}
                         {(devis.lignes_matiere_detail?.some((m) => m.ligne_devis === l.id) ||
                           devis.lignes_operation_detail?.some((o) => o.ligne_devis === l.id)) && (
                           <Box sx={{ mt: 1, pl: 1, borderLeft: "2px solid", borderColor: "divider" }}>
@@ -675,8 +673,7 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                   </>
                 )}
 
-                {/* RG33 : options de personnalisation sur-mesure du devis — jusqu'ici
-                    calculées et exposées par l'API sans aucune interface. */}
+                {/* RG33 : options de personnalisation */}
                 <Divider sx={{ my: 1.5 }} />
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
                   Options de personnalisation (RG33)
@@ -781,6 +778,34 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
                   </>
                 )}
 
+                {/* Raccourcis vers les pages dédiées Devis / Estimation IA */}
+                <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => {
+                      onClose?.();
+                      navigate(`/devis/${devis.id}`);
+                    }}
+                    sx={{ textTransform: "none" }}
+                  >
+                    Ouvrir la fiche devis
+                  </Button>
+                  {estimation?.id && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        onClose?.();
+                        navigate(`/estimations/${estimation.id}`);
+                      }}
+                      sx={{ textTransform: "none" }}
+                    >
+                      Ouvrir l&apos;estimation IA
+                    </Button>
+                  )}
+                </Stack>
+
                 {!devis.valide && peutGererDevis && (
                   <Button
                     variant="contained"
@@ -798,7 +823,6 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
         </Box>
       </Box>
 
-      {/* Dialogue : validation du devis */}
       <ConfirmDialog
         ouvert={confirmationValidationDevis}
         titre="Valider ce devis ?"
@@ -811,7 +835,6 @@ export default function CommandeDetailContent({ commandeId, onClose, onDossierCr
         onAnnuler={() => setConfirmationValidationDevis(false)}
       />
 
-      {/* Dialogue : création du dossier de fabrication */}
       <ConfirmDialog
         ouvert={confirmationCreationDossier}
         titre="Créer le dossier de fabrication ?"
