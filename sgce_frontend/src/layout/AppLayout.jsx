@@ -80,6 +80,7 @@ const sideItemIn = keyframes`
 
 const HAUTEUR_NAV = { xs: 44, sm: 46 };
 
+
 const ELEMENTS_MENU = [
   { label: "Tableau de bord", to: "/", icon: <DashboardIcon />, roles: null },
   { label: "Commandes", to: "/commandes", icon: <AssignmentIcon />, roles: ["ADMIN", "AGENT_SDO"] },
@@ -162,7 +163,7 @@ export default function AppLayout() {
       const data = await listerNotifications();
       dispatch(setNotifications(Array.isArray(data) ? data : data.results || []));
     } catch {
-      // silencieux
+      // silencieux : l'absence de notifications ne doit pas bloquer l'UI
     }
   };
 
@@ -226,7 +227,7 @@ export default function AppLayout() {
     try {
       await apiSupprimerNotification(id);
     } catch {
-      // pas bloquant
+      // pas bloquant : la notification reste supprimée côté interface
     }
   };
 
@@ -242,7 +243,7 @@ export default function AppLayout() {
       await apiSupprimerToutesNotifications();
       afficherSucces("Toutes les notifications ont été supprimées.");
     } catch {
-      // pas bloquant
+      // pas bloquant : la liste est déjà vidée côté interface
     }
   };
 
@@ -275,7 +276,7 @@ export default function AppLayout() {
       dispatch(setUtilisateur(utilisateurMisAJour));
       afficherSucces("Photo de profil mise à jour avec succès.");
     } catch {
-      // pas bloquant
+      // pas bloquant : la photo precedente (ou les initiales) reste affichee
     } finally {
       setTeleversementPhoto(false);
     }
@@ -293,6 +294,8 @@ export default function AppLayout() {
 
   return (
     <Box sx={{ display: "flex", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
+      {/* ===== Barre supérieure ===== */}
+      {/* Navbar 2 — bleu nuit + liseré animé */}
       <AppBar
         position="fixed"
         elevation={0}
@@ -764,6 +767,7 @@ export default function AppLayout() {
         </Toolbar>
       </AppBar>
 
+      {/* ===== Sidebar v1 — claire, barre + point éloigné du libellé ===== */}
       <Drawer
         variant="permanent"
         sx={{
@@ -841,13 +845,14 @@ export default function AppLayout() {
                 to={item.to}
                 end={item.to === "/"}
                 sx={{
-                  /* hauteur + espacement : INCHANGÉS */
+                  /* hauteur + espacement entre boutons */
                   minHeight: 44,
                   py: 1,
                   mb: 1.1,
                   borderRadius: 1.5,
                   justifyContent: sidebarOuverte ? "flex-start" : "center",
                   px: sidebarOuverte ? 1 : 0.5,
+                  /* large marge droite : texte et point bien séparés */
                   pr: sidebarOuverte ? 3 : 0.5,
                   gap: 0.85,
                   color: "text.secondary",
@@ -866,6 +871,7 @@ export default function AppLayout() {
                     fontWeight: 700,
                     boxShadow: (th) => `inset 3px 0 0 ${th.palette.primary.main}`,
                     "& .MuiListItemIcon-root": { color: "primary.main" },
+                    /* point collé au bord droit de la sidebar */
                     "&::after": sidebarOuverte
                       ? {
                           content: '""',
@@ -883,6 +889,7 @@ export default function AppLayout() {
                   },
                   "& .MuiListItemText-root": {
                     margin: 0,
+                    /* espace réservé entre le libellé et le point */
                     pr: sidebarOuverte ? 2 : 0,
                     maxWidth: sidebarOuverte ? "calc(100% - 12px)" : "100%",
                   },
@@ -893,8 +900,7 @@ export default function AppLayout() {
                     minWidth: 0,
                     justifyContent: "center",
                     color: "inherit",
-                    /* icône réduite */
-                    "& .MuiSvgIcon-root": { fontSize: 15 },
+                    "& .MuiSvgIcon-root": { fontSize: 18 },
                   }}
                 >
                   {item.icon}
@@ -903,8 +909,7 @@ export default function AppLayout() {
                   <ListItemText
                     primary={item.label}
                     primaryTypographyProps={{
-                      /* texte réduit — seule modification de taille */
-                      fontSize: 10.5,
+                      fontSize: 11.5,
                       fontWeight: 600,
                       noWrap: true,
                       lineHeight: 1.25,
@@ -977,6 +982,7 @@ export default function AppLayout() {
         </Box>
       </Drawer>
 
+      {/* ===== Contenu principal ===== */}
       <Box
         component="main"
         sx={{
