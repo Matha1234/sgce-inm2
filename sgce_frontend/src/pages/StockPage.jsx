@@ -666,7 +666,26 @@ export default function StockPage() {
         <DialogContent dividers>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
             <Alert severity="info">
-              Stock disponible : <strong>{Number(articleSelectionne?.quantite_stock).toLocaleString("fr-FR")} {articleSelectionne?.unite}</strong>
+              Stock physique :{" "}
+              <strong>
+                {Number(articleSelectionne?.quantite_stock || 0).toLocaleString("fr-FR")}{" "}
+                {articleSelectionne?.unite}
+              </strong>
+              {" · "}
+              Réservé :{" "}
+              <strong>
+                {Number(articleSelectionne?.quantite_reservee || 0).toLocaleString("fr-FR")}
+              </strong>
+              {" · "}
+              Disponible :{" "}
+              <strong>
+                {Number(
+                  articleSelectionne?.quantite_disponible
+                    ?? (Number(articleSelectionne?.quantite_stock || 0)
+                      - Number(articleSelectionne?.quantite_reservee || 0))
+                ).toLocaleString("fr-FR")}{" "}
+                {articleSelectionne?.unite}
+              </strong>
             </Alert>
             <TextField select label="Type de mouvement" fullWidth value={typeMouvement}
               onChange={(e) => setTypeMouvement(e.target.value)}>
