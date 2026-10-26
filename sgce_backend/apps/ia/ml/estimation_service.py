@@ -1,3 +1,11 @@
+"""
+Service d'estimation intelligente des couts (Sprint 4-5 / Phase 1 Sprint A).
+
+Deux modes (RG20) :
+- historique insuffisant → heuristique (version_modele = heuristique-v0)
+- assez de devis → XGBoost (version_modele = xgboost-v1)
+"""
+
 import os
 
 from django.conf import settings
@@ -8,7 +16,6 @@ MODEL_DIR = os.path.join(settings.BASE_DIR, "apps", "ia", "ml", "modeles")
 MODEL_PATH_PRIX = os.path.join(MODEL_DIR, "modele_prix.joblib")
 MODEL_PATH_DUREE = os.path.join(MODEL_DIR, "modele_duree.joblib")
 
-# RG20 : nombre minimal de devis necessaires avant d'entrainer un modele fiable
 SEUIL_HISTORIQUE_MINIMAL = 20
 
 PRIX_BASE_HEURISTIQUE = {
@@ -22,7 +29,7 @@ PRIX_BASE_HEURISTIQUE = {
 
 
 def construire_dataset():
-    """Construit un DataFrame a partir de tous les devis existants (reels et fictifs)."""
+    """Construit un DataFrame a partir de tous les devis existants."""
     import pandas as pd
 
     qs = Devis.objects.select_related("commande").all()
@@ -35,13 +42,20 @@ def construire_dataset():
             "duree_production": devis.duree_production,
         }
         for devis in qs
-        if devis.prix_revient is not None and devis.duree_production is not None
+        if devis.commande_id and devis.prix_revient is not None
     ]
     return pd.DataFrame(lignes)
 
 
+def _charger_modele(chemin):
+    if not os.path.exists(chemin):
+        return None
+    import joblib
+    return joblib.load(chemin)
+
+
 def entrainer_modele():
-    """Entraine les modeles XGBoost (prix et duree) sur l'historique disponible."""
+    """Entraine les modeles XGBoost (prix et duree)."""
     import joblib
     import pandas as pd
     from xgboost import XGBRegressor
@@ -50,53 +64,34 @@ def entrainer_modele():
     if len(df) < SEUIL_HISTORIQUE_MINIMAL:
         return {
             "entraine": False,
-            "raison": (
-                f"Historique insuffisant ({len(df)} devis disponibles, "
-                f"{SEUIL_HISTORIQUE_MINIMAL} requis - RG20)."
-            ),
+            "raison": f"Historique insuffisant ({len(df)} < {SEUIL_HISTORIQUE_MINIMAL})",
+            "nb_exemples": len(df),
         }
 
-    df_encoded = pd.get_dummies(df, columns=["type_document", "atelier"])
-    colonnes_features = [
-        c for c in df_encoded.columns if c not in ("prix_revient", "duree_production")
-    ]
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
-    X = df_encoded[colonnes_features]
-    y_prix = df_encoded["prix_revient"]
-    y_duree = df_encoded["duree_production"]
+    y_prix = df["prix_revient"]
+    y_duree = df["duree_production"]
+    X = pd.get_dummies(df[["type_document", "quantite", "atelier"]], columns=["type_document", "atelier"])
 
-    modele_prix = XGBRegressor(n_estimators=100, max_depth=4, random_state=42)
+    modele_prix = XGBRegressor(n_estimators=50, max_depth=4, random_state=42)
+    modele_duree = XGBRegressor(n_estimators=50, max_depth=4, random_state=42)
     modele_prix.fit(X, y_prix)
-
-    modele_duree = XGBRegressor(n_estimators=100, max_depth=4, random_state=42)
     modele_duree.fit(X, y_duree)
 
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    joblib.dump({"modele": modele_prix, "colonnes": colonnes_features}, MODEL_PATH_PRIX)
-    joblib.dump({"modele": modele_duree, "colonnes": colonnes_features}, MODEL_PATH_DUREE)
+    joblib.dump({"modele": modele_prix, "colonnes": list(X.columns)}, MODEL_PATH_PRIX)
+    joblib.dump({"modele": modele_duree, "colonnes": list(X.columns)}, MODEL_PATH_DUREE)
 
     return {"entraine": True, "nb_exemples": len(df)}
 
 
-def _charger_modele(path):
-    import joblib
-
-    if not os.path.exists(path):
-        return None
-    return joblib.load(path)
-
-
 def predire_cout(type_document, quantite, atelier):
-    """
-    Predit le prix de revient et la duree de production. Si aucun modele
-    entraine n'est disponible, applique le repli heuristique (RG20).
-
-    Retourne toujours :
-    - prix_predit, duree_predite, version_modele
-    - methode (XGBOOST | HEURISTIQUE)
-    - score_confiance (0-100)
-    """
+    """Predoit prix et duree ; renvoie aussi methode et score_confiance."""
     import pandas as pd
+
+    n = Devis.objects.count()
+    if n < SEUIL_HISTORIQUE_MINIMAL:
+        return _estimation_heuristique(type_document, quantite, atelier)
 
     modele_prix_data = _charger_modele(MODEL_PATH_PRIX)
     modele_duree_data = _charger_modele(MODEL_PATH_DUREE)
@@ -114,40 +109,30 @@ def predire_cout(type_document, quantite, atelier):
     prix_predit = float(modele_prix_data["modele"].predict(ligne_encoded)[0])
     duree_predite = max(1, round(float(modele_duree_data["modele"].predict(ligne_encoded)[0])))
 
-    # Securite : un prix de revient ne peut jamais etre negatif ou nul.
     if prix_predit <= 0:
         return _estimation_heuristique(type_document, quantite, atelier)
-
-    try:
-        n_hist = Devis.objects.count()
-    except Exception:
-        n_hist = SEUIL_HISTORIQUE_MINIMAL
-    score = min(95.0, 75.0 + max(0, n_hist - SEUIL_HISTORIQUE_MINIMAL) * 0.5)
 
     return {
         "prix_predit": round(prix_predit, 2),
         "duree_predite": int(duree_predite),
         "version_modele": "xgboost-v1",
         "methode": "XGBOOST",
-        "score_confiance": round(score, 2),
+        "score_confiance": 75.00,
     }
 
 
 def _estimation_heuristique(type_document, quantite, atelier):
-    """Estimation de secours (RG20), calcul simple et transparent."""
+    """Estimation de secours (RG20)."""
     prix_base = PRIX_BASE_HEURISTIQUE.get(type_document, 400)
     multiplicateur = 1.4 if atelier == "SPB" else 1.0
 
     prix_predit = round(prix_base * multiplicateur * (quantite / 100), 2)
     duree_predite = max(1, int(round(2 + (quantite / 800) * multiplicateur)))
 
-    type_connu = type_document in PRIX_BASE_HEURISTIQUE
-    score = 60.0 if type_connu else 45.0
-
     return {
         "prix_predit": prix_predit,
         "duree_predite": duree_predite,
         "version_modele": "heuristique-v0",
         "methode": "HEURISTIQUE",
-        "score_confiance": score,
+        "score_confiance": 50.00,
     }

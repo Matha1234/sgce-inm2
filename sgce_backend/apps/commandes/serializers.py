@@ -27,14 +27,13 @@ class OrganismeClientSerializer(serializers.ModelSerializer):
 class EstimationIAResumeSerializer(serializers.Serializer):
     """Resume en lecture seule de l'estimation IA liee a un devis."""
 
+    id = serializers.IntegerField(allow_null=True)
     prix_predit = serializers.DecimalField(max_digits=12, decimal_places=2)
     duree_predite = serializers.IntegerField()
     version_modele = serializers.CharField()
-    methode = serializers.CharField(allow_null=True, required=False)
-    score_confiance = serializers.DecimalField(
-        max_digits=5, decimal_places=2, allow_null=True, required=False
-    )
-    date_estimation = serializers.DateTimeField(allow_null=True, required=False)
+    methode = serializers.CharField()
+    score_confiance = serializers.DecimalField(max_digits=5, decimal_places=2, allow_null=True)
+    date_estimation = serializers.DateTimeField(allow_null=True)
 
 
 class OptionDevisSerializer(serializers.ModelSerializer):

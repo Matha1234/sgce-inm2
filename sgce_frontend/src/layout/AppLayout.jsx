@@ -836,7 +836,7 @@ export default function AppLayout() {
           </Box>
         </Box>
 
-        <List sx={{ px: sidebarOuverte ? 0.75 : 0.5, py: 0.5, flex: 1, gap: 0 }}>
+        <List sx={{ px: sidebarOuverte ? 0.6 : 0.4, py: 0.25, flex: 1, gap: 0 }}>
           {menuVisible.map((item, index) => {
             const bouton = (
               <ListItemButton
@@ -845,16 +845,15 @@ export default function AppLayout() {
                 to={item.to}
                 end={item.to === "/"}
                 sx={{
-                  /* hauteur + espacement entre boutons */
-                  minHeight: 44,
-                  py: 1,
-                  mb: 1.1,
-                  borderRadius: 1.5,
+                  /* menu compact : icônes/textes plus petits, moins d'espace */
+                  minHeight: 38,
+                  py: 0.35,
+                  mb: 1,
+                  borderRadius: 1.25,
                   justifyContent: sidebarOuverte ? "flex-start" : "center",
-                  px: sidebarOuverte ? 1 : 0.5,
-                  /* large marge droite : texte et point bien séparés */
-                  pr: sidebarOuverte ? 3 : 0.5,
-                  gap: 0.85,
+                  px: sidebarOuverte ? 0.85 : 0.4,
+                  pr: sidebarOuverte ? 2.5 : 0.4,
+                  gap: 0.65,
                   color: "text.secondary",
                   position: "relative",
                   overflow: "hidden",
@@ -900,7 +899,7 @@ export default function AppLayout() {
                     minWidth: 0,
                     justifyContent: "center",
                     color: "inherit",
-                    "& .MuiSvgIcon-root": { fontSize: 18 },
+                    "& .MuiSvgIcon-root": { fontSize: 16 },
                   }}
                 >
                   {item.icon}
@@ -909,10 +908,10 @@ export default function AppLayout() {
                   <ListItemText
                     primary={item.label}
                     primaryTypographyProps={{
-                      fontSize: 11.5,
+                      fontSize: 11,
                       fontWeight: 600,
                       noWrap: true,
-                      lineHeight: 1.25,
+                      lineHeight: 1.2,
                     }}
                   />
                 )}

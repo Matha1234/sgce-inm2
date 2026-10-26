@@ -12,9 +12,9 @@ from .serializers import EstimationIASerializer, EstimationInputSerializer
 class EstimerCoutView(APIView):
     """
     POST /api/ia/estimer/
-    Retourne une estimation du prix de revient et de la duree de production
-    pour un type de document, une quantite et un atelier donnes.
-    Reserve a l'Agent SDO (et l'Administrateur).
+    Retourne une estimation du prix de revient et de la durée de production
+    pour un type de document, une quantité et un atelier donnés.
+    Réservé à l'Agent SDO (et l'Administrateur).
     """
 
     permission_classes = [IsAgentSDO]
@@ -29,8 +29,8 @@ class EstimerCoutView(APIView):
 class EntrainerModeleView(APIView):
     """
     POST /api/ia/entrainer/
-    Relance l'entrainement du modele XGBoost sur l'historique disponible.
-    Reserve a l'Administrateur (operation ponctuelle, pas destinee a un usage frequent).
+    Relance l'entraînement du modèle XGBoost sur l'historique disponible.
+    Réservé à l'Administrateur.
     """
 
     permission_classes = [IsAdmin]
@@ -43,12 +43,12 @@ class EntrainerModeleView(APIView):
 class EstimationIAListView(generics.ListAPIView):
     """
     GET /api/estimations/
-    Liste de toutes les estimations IA enregistrees (Agent SDO / Admin).
+    Liste de toutes les estimations IA enregistrées (Agent SDO / Admin).
 
     Filtres optionnels :
-      ?devis=<id>       — estimation d'un devis donne
+      ?devis=<id>
       ?methode=XGBOOST|HEURISTIQUE
-      ?commande=<id>    — via le devis lie
+      ?commande=<id>
     """
 
     queryset = EstimationIA.objects.select_related(
@@ -76,7 +76,7 @@ class EstimationIAListView(generics.ListAPIView):
 class EstimationIADetailView(generics.RetrieveAPIView):
     """
     GET /api/estimations/<id>/
-    Detail d'une estimation IA (lecture seule).
+    Détail d'une estimation IA (lecture seule).
     """
 
     queryset = EstimationIA.objects.select_related(

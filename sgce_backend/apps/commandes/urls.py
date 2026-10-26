@@ -30,6 +30,7 @@ urlpatterns = [
     path("commandes/", CommandeListCreateView.as_view(), name="commandes-list"),
     path("commandes/<int:pk>/", CommandeDetailView.as_view(), name="commandes-detail"),
 
+    # Liste + création devis (Sprint A)
     path("devis/", DevisListCreateView.as_view(), name="devis-list-create"),
     path("devis/<int:pk>/", DevisDetailView.as_view(), name="devis-detail"),
 
